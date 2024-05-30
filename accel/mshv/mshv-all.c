@@ -22,6 +22,8 @@ typedef struct MSHVState {
 
 DECLARE_INSTANCE_CHECKER(MSHVState, MSHV_STATE, TYPE_MSHV_ACCEL)
 
+bool mshv_allowed;
+
 static int mshv_init(MachineState *ms) {
   MachineClass *mc = MACHINE_GET_CLASS(ms);
   MSHVState *s;
@@ -49,6 +51,7 @@ static void mshv_accel_class_init(ObjectClass *oc, void *data) {
 
   ac->name = "MSHV";
   ac->init_machine = mshv_init;
+  ac->allowed = &mshv_allowed;
 }
 
 static void mshv_accel_instance_init(Object *obj)
