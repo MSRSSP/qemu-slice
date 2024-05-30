@@ -49,18 +49,33 @@ static void mshv_accel_class_init(ObjectClass *oc, void *data) {
   ac->init_machine = mshv_init;
 }
 
+static void mshv_accel_instance_init(Object *obj)
+{
+    MSHVState *s = MSHV_STATE(obj);
+
+    s->mshv.mshv = NULL;
+    s->vmfd.vmfd = NULL;
+}
+
 static const TypeInfo mshv_accel_type = {
     .name = TYPE_MSHV_ACCEL,
     .parent = TYPE_ACCEL,
-    //.instance_init = mshv_accel_instance_init,
+    .instance_init = mshv_accel_instance_init,
     .class_init = mshv_accel_class_init,
     .instance_size = sizeof(MSHVState),
 };
 
+static void mshv_accel_ops_class_init(ObjectClass *oc, void *data)
+{
+    AccelOpsClass *ops = ACCEL_OPS_CLASS(oc);
+
+    //ops->create_vcpu_thread = dummy_start_vcpu_thread;
+}
+
 static const TypeInfo mshv_accel_ops_type = {
     .name = ACCEL_OPS_NAME("mshv"),
     .parent = TYPE_ACCEL_OPS,
-    //.class_init = xen_accel_ops_class_init,
+    .class_init = mshv_accel_ops_class_init,
     .abstract = true,
 };
 
