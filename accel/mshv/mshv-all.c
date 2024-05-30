@@ -1,8 +1,10 @@
+#include "qemu/osdep.h"
+#include "qemu/module.h"
+
+
 #include "qapi/error.h"
 #include "qemu/accel.h"
 #include "qemu/error-report.h"
-#include "qemu/module.h"
-#include "qemu/osdep.h"
 #include "sysemu/cpus.h"
 
 #include "hw/boards.h"
@@ -69,7 +71,7 @@ static void mshv_accel_ops_class_init(ObjectClass *oc, void *data)
 {
     AccelOpsClass *ops = ACCEL_OPS_CLASS(oc);
 
-    //ops->create_vcpu_thread = dummy_start_vcpu_thread;
+    ops->create_vcpu_thread = dummy_start_vcpu_thread;
 }
 
 static const TypeInfo mshv_accel_ops_type = {
