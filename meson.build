@@ -730,9 +730,8 @@ accelerators = []
 mshv_ioctls = not_found
 mshv_bindings = not_found
 if get_option('mshv').allowed() and host_os == 'linux'
-  mshv_ioctls = cc.find_library('mshv_ioctls_c',  dirs: ['/home/ziqiao/l1vh/mshv/target/debug'], required: get_option('mshv'))
-  mshv_bindings = cc.find_library('mshv_bindings',  dirs: ['/home/ziqiao/l1vh/mshv/target/debug'], required: get_option('mshv'))
-
+  mshv_ioctls = cc.find_library('mshv_ioctls_c', required: get_option('mshv'))
+  mshv_bindings = cc.find_library('mshv_bindings', required: get_option('mshv'))
   if mshv_bindings.found() and mshv_ioctls.found()
     accelerators += 'CONFIG_MSHV'
 endif
