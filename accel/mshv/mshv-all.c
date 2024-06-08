@@ -70,12 +70,10 @@ static void mshv_set_phys_mem(MemoryRegionSection *section, bool add)
     uint64_t page_size = qemu_real_host_page_size();
     uint64_t mem_size = int128_get64(section->size);
 
-    qemu_log_mask(LOG_GUEST_ERROR,
-                  "(todo) %s: mem(%p)[offset: %lx size: %lx]: %s\n", __func__,
-                  memory_region_get_ram_ptr(area),
+	qemu_log_mask(LOG_GUEST_ERROR,
+                  "(todo) %s: mem[offset: %lx size: %lx]: %s\n", __func__,
                   section->offset_within_address_space, mem_size,
                   area->readonly ? "ronly" : "rw");
-
     if (!memory_region_is_ram(area)) {
         if (writable) {
             return;
@@ -93,6 +91,13 @@ static void mshv_set_phys_mem(MemoryRegionSection *section, bool add)
         /* Not page aligned, so we can not map as RAM */
         add = false;
     }
+
+	
+    qemu_log_mask(LOG_GUEST_ERROR,
+                  "(todo) %s: mem(%p)[offset: %lx size: %lx]: %s\n", __func__,
+                  add ? memory_region_get_ram_ptr(area) : NULL,
+                  section->offset_within_address_space, mem_size,
+                  area->readonly ? "ronly" : "rw");
 }
 
 static void mshv_region_add(MemoryListener *listener,
