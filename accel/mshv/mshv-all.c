@@ -63,16 +63,48 @@ static void mshv_log_sync(MemoryListener *listener,
     mshv_set_dirty_tracking(section, 1);
 }
 
+static void mshv_set_phys_mem(MemoryRegionSection *section, bool add)
+{
+    MemoryRegion *area = section->mr;
+    bool writable = !area->readonly && !area->rom_device;
+    uint64_t page_size = qemu_real_host_page_size();
+    uint64_t mem_size = int128_get64(section->size);
+
+    qemu_log_mask(LOG_GUEST_ERROR,
+                  "(todo) %s: mem(%p)[offset: %lx size: %lx]: %s\n", __func__,
+                  memory_region_get_ram_ptr(area),
+                  section->offset_within_address_space, mem_size,
+                  area->readonly ? "ronly" : "rw");
+
+    if (!memory_region_is_ram(area)) {
+        if (writable) {
+            return;
+        } else if (!memory_region_is_romd(area)) {
+            /*
+             * If the memory device is not in romd_mode, then we actually want
+             * to remove the hvf memory slot so all accesses will trap.
+             */
+            add = false;
+        }
+    }
+
+    if (!QEMU_IS_ALIGNED(int128_get64(section->size), page_size) ||
+        !QEMU_IS_ALIGNED(section->offset_within_address_space, page_size)) {
+        /* Not page aligned, so we can not map as RAM */
+        add = false;
+    }
+}
+
 static void mshv_region_add(MemoryListener *listener,
                             MemoryRegionSection *section)
 {
-    qemu_log_mask(LOG_GUEST_ERROR, "%s: unimplemented\n", __func__);
+    mshv_set_phys_mem(section, true);
 }
 
 static void mshv_region_del(MemoryListener *listener,
                             MemoryRegionSection *section)
 {
-    qemu_log_mask(LOG_GUEST_ERROR, "%s: unimplemented\n", __func__);
+    mshv_set_phys_mem(section, false);
 }
 
 static MemoryListener mshv_memory_listener = {
