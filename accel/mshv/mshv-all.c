@@ -37,7 +37,7 @@ static int mshv_init(MachineState *ms)
     MshvState *s;
     uint64_t vm_type;
 
-	qemu_log_mask(LOG_GUEST_ERROR, "%s\n", __func__);
+    qemu_log_mask(LOG_GUEST_ERROR, "%s\n", __func__);
 
     s = MSHV_STATE(ms->accelerator);
 
@@ -47,8 +47,7 @@ static int mshv_init(MachineState *ms)
     // TODO: object_property_find(OBJECT(current_machine), "mshv-type")
     vm_type = 0;
     do {
-        qemu_log_mask(LOG_GUEST_ERROR, "%s: mshv_create_vm_with_type\n",
-                      __func__);
+        qemu_log_mask(LOG_GUEST_ERROR, "%s\n", __func__);
         s->vm = mshv_create_vm_with_type(s->mshv, vm_type);
     } while (s->vm == NULL);
 
@@ -186,8 +185,13 @@ static void *mshv_vcpu_thread_fn(void *arg)
     cpu_thread_signal_created(cpu);
     qemu_guest_random_seed_thread_part2(cpu->random_seed);
 
+    qemu_log_mask(LOG_GUEST_ERROR, "%s:%d: cpu = %d\n",
+                  __func__, __LINE__, cpu->cpu_index);
     do {
         if (cpu_can_run(cpu)) {
+            qemu_log_mask(LOG_GUEST_ERROR,
+                          "%s:%d: cpu = %d\n", __func__,
+                          __LINE__, cpu->cpu_index);
             mshv_run_vcpu_qemu(cpu);
         }
         qemu_wait_io_event(cpu);
