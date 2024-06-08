@@ -16,20 +16,20 @@
 
 #define LOG_MSHV_MASK LOG_GUEST_ERROR
 
-#define mshv_log(FMT, ...)           \
-    do {                             \
-        qemu_log_mask(LOG_MSHV_MASK) \
+#define mshv_log(FMT, ...)                                \
+    do {                                                  \
+        qemu_log_mask(LOG_MSHV_MASK, FMT, ##__VA_ARGS__); \
     } while (0)
 
 
-#define mshv_debug()                            \
-    do {                                        \
-        mshv_log("%s:%d\n", __func__, __LINE__) \
+#define mshv_debug()                             \
+    do {                                         \
+        mshv_log("%s:%d\n", __func__, __LINE__); \
     } while (0)
 
-#define mshv_todo()                                   \
-    do {                                              \
-        mshv_log("[todo]%s:%d\n", __func__, __LINE__) \
+#define mshv_todo()                                    \
+    do {                                               \
+        mshv_log("[todo]%s:%d\n", __func__, __LINE__); \
     } while (0)
 
 typedef struct MshvState {
@@ -48,7 +48,7 @@ MshvState *mshv_state;
 
 static void mshv_set_dirty_tracking(MemoryRegionSection *section, bool on)
 {
-    mshv_todo()
+    mshv_todo();
 }
 
 static void mshv_log_start(MemoryListener *listener,
