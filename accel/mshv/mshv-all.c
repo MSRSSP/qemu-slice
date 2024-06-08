@@ -14,6 +14,24 @@
 
 #include <mshv.h>
 
+#define LOG_MSHV_MASK LOG_GUEST_ERROR
+
+#define mshv_log(FMT, ...)           \
+    do {                             \
+        qemu_log_mask(LOG_MSHV_MASK) \
+    } while (0)
+
+
+#define mshv_debug()                            \
+    do {                                        \
+        mshv_log("%s:%d\n", __func__, __LINE__) \
+    } while (0)
+
+#define mshv_todo()                                   \
+    do {                                              \
+        mshv_log("[todo]%s:%d\n", __func__, __LINE__) \
+    } while (0)
+
 typedef struct MshvState {
     AccelState parent_obj;
     MshvHypervisorC *mshv;
@@ -30,7 +48,7 @@ MshvState *mshv_state;
 
 static void mshv_set_dirty_tracking(MemoryRegionSection *section, bool on)
 {
-    qemu_log_mask(LOG_GUEST_ERROR, "%s: unimplemented\n", __func__);
+    mshv_todo()
 }
 
 static void mshv_log_start(MemoryListener *listener,
@@ -70,10 +88,9 @@ static void mshv_set_phys_mem(MemoryRegionSection *section, bool add)
     uint64_t page_size = qemu_real_host_page_size();
     uint64_t mem_size = int128_get64(section->size);
 
-	qemu_log_mask(LOG_GUEST_ERROR,
-                  "(todo) %s: mem[offset: %lx size: %lx]: %s\n", __func__,
-                  section->offset_within_address_space, mem_size,
-                  area->readonly ? "ronly" : "rw");
+    mshv_log("(todo) %s: mem[offset: %lx size: %lx]: %s\n", __func__,
+             section->offset_within_address_space, mem_size,
+             area->readonly ? "ronly" : "rw");
     if (!memory_region_is_ram(area)) {
         if (writable) {
             return;
@@ -92,12 +109,10 @@ static void mshv_set_phys_mem(MemoryRegionSection *section, bool add)
         add = false;
     }
 
-	
-    qemu_log_mask(LOG_GUEST_ERROR,
-                  "(todo) %s: mem(%p)[offset: %lx size: %lx]: %s\n", __func__,
-                  add ? memory_region_get_ram_ptr(area) : NULL,
-                  section->offset_within_address_space, mem_size,
-                  area->readonly ? "ronly" : "rw");
+    mshv_log("(todo) %s: mem(%p)[offset: %lx size: %lx]: %s\n", __func__,
+             add ? memory_region_get_ram_ptr(area) : NULL,
+             section->offset_within_address_space, mem_size,
+             area->readonly ? "ronly" : "rw");
 }
 
 static void mshv_region_add(MemoryListener *listener,
@@ -134,7 +149,7 @@ static int mshv_init(MachineState *ms)
     MshvState *s;
     uint64_t vm_type;
 
-    qemu_log_mask(LOG_GUEST_ERROR, "%s\n", __func__);
+    mshv_debug();
 
     s = MSHV_STATE(ms->accelerator);
 
@@ -144,7 +159,7 @@ static int mshv_init(MachineState *ms)
     // TODO: object_property_find(OBJECT(current_machine), "mshv-type")
     vm_type = 0;
     do {
-        qemu_log_mask(LOG_GUEST_ERROR, "%s\n", __func__);
+        mshv_debug();
         s->vm = mshv_create_vm_with_type(s->mshv, vm_type);
     } while (s->vm == NULL);
 
@@ -160,7 +175,7 @@ static int mshv_init(MachineState *ms)
 static void mshv_accel_class_init(ObjectClass *oc, void *data)
 {
     AccelClass *ac = ACCEL_CLASS(oc);
-    qemu_log_mask(LOG_GUEST_ERROR, "%s\n", __func__);
+    mshv_debug();
 
     ac->name = "MSHV";
     ac->init_machine = mshv_init;
@@ -170,7 +185,7 @@ static void mshv_accel_class_init(ObjectClass *oc, void *data)
 static void mshv_accel_instance_init(Object *obj)
 {
     MshvState *s = MSHV_STATE(obj);
-    qemu_log_mask(LOG_GUEST_ERROR, "%s\n", __func__);
+    mshv_debug();
 
     s->mshv = NULL;
     s->vm = NULL;
@@ -212,7 +227,7 @@ int mshv_run_vcpu_qemu(CPUState *cpu)
     bql_unlock();
     cpu_exec_start(cpu);
 
-    qemu_log_mask(LOG_GUEST_ERROR, "%s\n", __func__);
+    mshv_debug();
     do {
         if (cpu->vcpu_dirty) {
             // ret = kvm_arch_put_registers(cpu, KVM_PUT_RUNTIME_STATE);
@@ -226,14 +241,8 @@ int mshv_run_vcpu_qemu(CPUState *cpu)
             cpu->vcpu_dirty = false;
         }
 
-        // kvm_arch_pre_run(cpu, run);
         if (qatomic_read(&cpu->exit_request)) {
-            /*
-             * KVM requires us to reenter the kernel after IO exits to complete
-             * instruction emulation. This self-signal will ensure that we
-             * leave ASAP again.
-             */
-            // kvm_cpu_kick_self();
+            mshv_debug();
         }
 
         /* Read cpu->exit_request before KVM_RUN reads run->immediate_exit.
@@ -285,16 +294,12 @@ static void *mshv_vcpu_thread_fn(void *arg)
     cpu_thread_signal_created(cpu);
     qemu_guest_random_seed_thread_part2(cpu->random_seed);
 
-    qemu_log_mask(LOG_GUEST_ERROR, "%s:%d: cpu = %d\n", __func__, __LINE__,
-                  cpu->cpu_index);
+    mshv_log("%s:%d: cpu = %d\n", __func__, __LINE__, cpu->cpu_index);
     do {
         if (cpu_can_run(cpu)) {
-            qemu_log_mask(LOG_GUEST_ERROR, "%s:%d: cpu = %d\n", __func__,
-                          __LINE__, cpu->cpu_index);
+            mshv_debug();
             mshv_run_vcpu_qemu(cpu);
         }
-        qemu_log_mask(LOG_GUEST_ERROR, "%s:%d: cpu = %d\n", __func__, __LINE__,
-                      cpu->cpu_index);
         qemu_wait_io_event(cpu);
     } while (!cpu->unplug || cpu_can_run(cpu));
 
@@ -313,8 +318,8 @@ static void mshv_start_vcpu_thread(CPUState *cpu)
     cpu->halt_cond = g_malloc0(sizeof(QemuCond));
     qemu_cond_init(cpu->halt_cond);
 
-    qemu_log_mask(LOG_GUEST_ERROR, "%s: thread_name = %s, cpu = %d\n", __func__,
-                  thread_name, cpu->cpu_index);
+    mshv_log("%s: thread_name = %s, cpu = %d\n", __func__, thread_name,
+             cpu->cpu_index);
     qemu_thread_create(cpu->thread, thread_name, mshv_vcpu_thread_fn, cpu,
                        QEMU_THREAD_JOINABLE);
 }
