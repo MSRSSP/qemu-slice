@@ -36,6 +36,9 @@ static int mshv_init(MachineState *ms)
     MachineClass *mc = MACHINE_GET_CLASS(ms);
     MshvState *s;
     uint64_t vm_type;
+
+	qemu_log_mask(LOG_GUEST_ERROR, "%s\n", __func__);
+
     s = MSHV_STATE(ms->accelerator);
 
     s->mshv = mshv_new();
@@ -58,6 +61,7 @@ static int mshv_init(MachineState *ms)
 static void mshv_accel_class_init(ObjectClass *oc, void *data)
 {
     AccelClass *ac = ACCEL_CLASS(oc);
+    qemu_log_mask(LOG_GUEST_ERROR, "%s\n", __func__);
 
     ac->name = "MSHV";
     ac->init_machine = mshv_init;
@@ -67,6 +71,7 @@ static void mshv_accel_class_init(ObjectClass *oc, void *data)
 static void mshv_accel_instance_init(Object *obj)
 {
     MshvState *s = MSHV_STATE(obj);
+    qemu_log_mask(LOG_GUEST_ERROR, "%s\n", __func__);
 
     s->mshv = NULL;
     s->vm = NULL;
@@ -108,6 +113,7 @@ int mshv_run_vcpu_qemu(CPUState *cpu)
     bql_unlock();
     cpu_exec_start(cpu);
 
+    qemu_log_mask(LOG_GUEST_ERROR, "%s\n", __func__);
     do {
         if (cpu->vcpu_dirty) {
             // ret = kvm_arch_put_registers(cpu, KVM_PUT_RUNTIME_STATE);
