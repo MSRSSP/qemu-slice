@@ -1,20 +1,17 @@
 #include "qemu/osdep.h"
+#include "qapi/error.h"
+#include "qemu/error-report.h"
 #include "qemu/module.h"
 
-
-#include "qapi/error.h"
+#include "exec/address-spaces.h"
+#include "hw/i386/x86.h" //ioapic_eoi_broadcast
 #include "qemu/accel.h"
-#include "qemu/error-report.h"
-#include "sysemu/cpus.h"
-
+#include "qemu/guest-random.h"
 #include "qemu/log.h"
-
-#include "hw/boards.h"
+#include "sysemu/cpus.h"
 #include "sysemu/runstate.h" //vm_stop
 #include "sysemu/stats.h"
 
-#include "hw/i386/x86.h" //ioapic_eoi_broadcast
-#include "qemu/guest-random.h"
 #include <mshv.h>
 
 typedef struct MshvState {
@@ -30,6 +27,69 @@ DECLARE_INSTANCE_CHECKER(MshvState, MSHV_STATE, TYPE_MSHV_ACCEL)
 bool mshv_allowed;
 
 MshvState *mshv_state;
+
+static void mshv_set_dirty_tracking(MemoryRegionSection *section, bool on)
+{
+    qemu_log_mask(LOG_GUEST_ERROR, "%s: unimplemented\n", __func__);
+}
+
+static void mshv_log_start(MemoryListener *listener,
+                           MemoryRegionSection *section, int old, int new)
+{
+    if (old != 0) {
+        return;
+    }
+
+    mshv_set_dirty_tracking(section, 1);
+}
+
+static void mshv_log_stop(MemoryListener *listener,
+                          MemoryRegionSection *section, int old, int new)
+{
+    if (new != 0) {
+        return;
+    }
+
+    mshv_set_dirty_tracking(section, 0);
+}
+
+static void mshv_log_sync(MemoryListener *listener,
+                          MemoryRegionSection *section)
+{
+    /*
+     * sync of dirty pages is handled elsewhere; just make sure we keep
+     * tracking the region.
+     */
+    mshv_set_dirty_tracking(section, 1);
+}
+
+static void mshv_region_add(MemoryListener *listener,
+                            MemoryRegionSection *section)
+{
+    qemu_log_mask(LOG_GUEST_ERROR, "%s: unimplemented\n", __func__);
+}
+
+static void mshv_region_del(MemoryListener *listener,
+                            MemoryRegionSection *section)
+{
+    qemu_log_mask(LOG_GUEST_ERROR, "%s: unimplemented\n", __func__);
+}
+
+static MemoryListener mshv_memory_listener = {
+    .name = "mshv",
+    .priority = MEMORY_LISTENER_PRIORITY_ACCEL,
+    .region_add = mshv_region_add,
+    .region_del = mshv_region_del,
+    .log_start = mshv_log_start,
+    .log_stop = mshv_log_stop,
+    .log_sync = mshv_log_sync,
+};
+
+
+static void mshv_memory_listener_register(AddressSpace *as)
+{
+    memory_listener_register(&mshv_memory_listener, as);
+}
 
 static int mshv_init(MachineState *ms)
 {
@@ -52,8 +112,11 @@ static int mshv_init(MachineState *ms)
     } while (s->vm == NULL);
 
     mc->default_ram_id = NULL;
-    mshv_state = s;
 
+    // register memory listener
+    mshv_memory_listener_register(&address_space_memory);
+
+    mshv_state = s;
     return 0;
 }
 
@@ -185,15 +248,16 @@ static void *mshv_vcpu_thread_fn(void *arg)
     cpu_thread_signal_created(cpu);
     qemu_guest_random_seed_thread_part2(cpu->random_seed);
 
-    qemu_log_mask(LOG_GUEST_ERROR, "%s:%d: cpu = %d\n",
-                  __func__, __LINE__, cpu->cpu_index);
+    qemu_log_mask(LOG_GUEST_ERROR, "%s:%d: cpu = %d\n", __func__, __LINE__,
+                  cpu->cpu_index);
     do {
         if (cpu_can_run(cpu)) {
-            qemu_log_mask(LOG_GUEST_ERROR,
-                          "%s:%d: cpu = %d\n", __func__,
+            qemu_log_mask(LOG_GUEST_ERROR, "%s:%d: cpu = %d\n", __func__,
                           __LINE__, cpu->cpu_index);
             mshv_run_vcpu_qemu(cpu);
         }
+        qemu_log_mask(LOG_GUEST_ERROR, "%s:%d: cpu = %d\n", __func__, __LINE__,
+                      cpu->cpu_index);
         qemu_wait_io_event(cpu);
     } while (!cpu->unplug || cpu_can_run(cpu));
 
