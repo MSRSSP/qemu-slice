@@ -81,12 +81,23 @@ static void mshv_log_sync(MemoryListener *listener,
     mshv_set_dirty_tracking(section, 1);
 }
 
+static bool do_mshv_set_memory(const MshvMemoryRegion* mem, bool add) {
+    if (add) {
+        return mshv_add_mem(mshv_state->vm, mem);
+    }
+    return false;
+}
+
 static void mshv_set_phys_mem(MemoryRegionSection *section, bool add)
 {
     MemoryRegion *area = section->mr;
     bool writable = !area->readonly && !area->rom_device;
     uint64_t page_size = qemu_real_host_page_size();
     uint64_t mem_size = int128_get64(section->size);
+    MshvMemoryRegion mem;
+    hwaddr as_offset = section->offset_within_address_space;
+    hwaddr region_offset = section->offset_within_region;
+    void* region_ptr = memory_region_get_ram_ptr(area);
 
     mshv_log("(todo) %s: mem[offset: %lx size: %lx]: %s\n", __func__,
              section->offset_within_address_space, mem_size,
@@ -109,10 +120,24 @@ static void mshv_set_phys_mem(MemoryRegionSection *section, bool add)
         add = false;
     }
 
-    mshv_log("(todo) %s: mem(%p)[offset: %lx size: %lx]: %s\n", __func__,
-             add ? memory_region_get_ram_ptr(area) : NULL,
-             section->offset_within_address_space, mem_size,
-             area->readonly ? "ronly" : "rw");
+    mem.guest_phys_addr = (uint64_t)region_ptr + (uint64_t)region_offset;
+    mem.memory_size = mem_size;
+    mem.readonly = !writable;
+    mem.userspace_addr = as_offset;
+
+    if (!add) {
+        if (do_mshv_set_memory(&mem, false)) {
+            error_report("Failed to remove mem\n");
+            abort();
+        }
+    }
+
+    do_mshv_set_memory(&mem, true);
+
+    mshv_log("(todo) %s: mem(%lx)[offset: %lx size: %lx]: %s\n", __func__,
+             add ? mem.guest_phys_addr : 0,
+             as_offset, mem_size,
+             mem.readonly ? "ronly" : "rw");
 }
 
 static void mshv_region_add(MemoryListener *listener,

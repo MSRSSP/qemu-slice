@@ -11,6 +11,16 @@ pub struct MshvHypervisorC;
 #[repr(C)]
 pub struct MshvVcpuC;
 
+#[repr(C)]
+pub struct MshvMemoryRegion {
+    slot: u32,
+    guest_phys_addr: u64,
+    memory_size: u64,
+    userspace_addr: u64,
+    readonly: bool,
+    log_dirty_pages: bool,
+}
+
 #[no_mangle]
 pub extern "C" fn mshv_new() -> Option<NonNull<MshvHypervisorC>> {
     let result = mshv::MshvHypervisor::new();
@@ -36,10 +46,10 @@ pub extern "C" fn mshv_create_vm_with_type(
             .expect("MshvHypervisor is NULL");
         let result = mshv.create_vm_with_type(vm_type);
         match result {
-            Ok(vm) => {
-                Some(NonNull::new(Arc::into_raw(vm) as *const () as *mut MshvVmC)
-                .expect("Result contained None, which is unexpected"))
-            }
+            Ok(vm) => Some(
+                NonNull::new(Arc::into_raw(vm) as *const () as *mut MshvVmC)
+                    .expect("Result contained None, which is unexpected"),
+            ),
             Err(e) => {
                 panic!("{}", e);
             }
@@ -54,8 +64,27 @@ pub extern "C" fn mshv_new_vcpu(vm: *mut MshvVmC, vcpu: u8) -> Option<NonNull<Ms
             .as_ref()
             .expect("MshvVm is NULL")
             .create_vcpu(vcpu, None);
-        vcpu.ok()
-            .map(|cpu| NonNull::new(Arc::into_raw(cpu) as *mut MshvVcpuC).expect("create_vcpu failed"))
+        vcpu.ok().map(|cpu| {
+            NonNull::new(Arc::into_raw(cpu) as *mut MshvVcpuC).expect("create_vcpu failed")
+        })
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn mshv_add_mem(vm: *mut MshvVmC, r: &MshvMemoryRegion) -> bool {
+    unsafe {
+        let vm = (vm as *mut mshv::MshvVm).as_ref().expect("MshvVm is NULL");
+        match vm.create_user_memory_region(vm.make_user_memory_region(
+            r.slot,
+            r.guest_phys_addr,
+            r.memory_size,
+            r.userspace_addr,
+            r.readonly,
+            r.log_dirty_pages,
+        )) {
+            Ok(_) => true,
+            _ => false,
+        }
     }
 }
 
@@ -71,7 +100,12 @@ pub enum MshvVmExit {
 
 #[no_mangle]
 pub extern "C" fn mshv_run_vcpu(vcpu: *mut MshvVcpuC, ioacpic_vector: &mut u8) -> MshvVmExit {
-    let ret = unsafe { (vcpu as *mut mshv::MshvVcpu).as_mut().expect("MshvVcpuC is NULL").run() };
+    let ret = unsafe {
+        (vcpu as *mut mshv::MshvVcpu)
+            .as_mut()
+            .expect("MshvVcpuC is NULL")
+            .run()
+    };
     match ret {
         Ok(vmexit) => {
             println!("{:?}", vmexit);
