@@ -81,7 +81,8 @@ static void mshv_log_sync(MemoryListener *listener,
     mshv_set_dirty_tracking(section, 1);
 }
 
-static bool do_mshv_set_memory(const MshvMemoryRegion* mem, bool add) {
+static bool do_mshv_set_memory(const MshvMemoryRegion *mem, bool add)
+{
     if (add) {
         return mshv_add_mem(mshv_state->vm, mem);
     }
@@ -97,7 +98,6 @@ static void mshv_set_phys_mem(MemoryRegionSection *section, bool add)
     MshvMemoryRegion mem;
     hwaddr as_offset = section->offset_within_address_space;
     hwaddr region_offset = section->offset_within_region;
-    void* region_ptr = memory_region_get_ram_ptr(area);
 
     mshv_log("(todo) %s: mem[offset: %lx size: %lx]: %s\n", __func__,
              section->offset_within_address_space, mem_size,
@@ -120,7 +120,8 @@ static void mshv_set_phys_mem(MemoryRegionSection *section, bool add)
         add = false;
     }
 
-    mem.guest_phys_addr = (uint64_t)region_ptr + (uint64_t)region_offset;
+    mem.guest_phys_addr =
+        (uint64_t)memory_region_get_ram_ptr(area) + (uint64_t)region_offset;
     mem.memory_size = mem_size;
     mem.readonly = !writable;
     mem.userspace_addr = as_offset;
@@ -135,8 +136,7 @@ static void mshv_set_phys_mem(MemoryRegionSection *section, bool add)
     do_mshv_set_memory(&mem, true);
 
     mshv_log("(todo) %s: mem(%lx)[offset: %lx size: %lx]: %s\n", __func__,
-             add ? mem.guest_phys_addr : 0,
-             as_offset, mem_size,
+             add ? mem.guest_phys_addr : 0, as_offset, mem_size,
              mem.readonly ? "ronly" : "rw");
 }
 
@@ -161,7 +161,6 @@ static MemoryListener mshv_memory_listener = {
     .log_stop = mshv_log_stop,
     .log_sync = mshv_log_sync,
 };
-
 
 static void mshv_memory_listener_register(AddressSpace *as)
 {
