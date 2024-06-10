@@ -16,20 +16,19 @@
 
 #define LOG_MSHV_MASK LOG_GUEST_ERROR
 
-#define mshv_log(FMT, ...)                                \
-    do {                                                  \
-        qemu_log_mask(LOG_MSHV_MASK, FMT, ##__VA_ARGS__); \
+#define mshv_log(FMT, ...)                                                     \
+    do {                                                                       \
+        qemu_log_mask(LOG_MSHV_MASK, FMT, ##__VA_ARGS__);                      \
     } while (0)
 
-
-#define mshv_debug()                             \
-    do {                                         \
-        mshv_log("%s:%d\n", __func__, __LINE__); \
+#define mshv_debug()                                                           \
+    do {                                                                       \
+        mshv_log("%s:%d\n", __func__, __LINE__);                               \
     } while (0)
 
-#define mshv_todo()                                    \
-    do {                                               \
-        mshv_log("[todo]%s:%d\n", __func__, __LINE__); \
+#define mshv_todo()                                                            \
+    do {                                                                       \
+        mshv_log("[todo]%s:%d\n", __func__, __LINE__);                         \
     } while (0)
 
 typedef struct MshvState {
@@ -89,7 +88,8 @@ static bool do_mshv_set_memory(const MshvMemoryRegion *mem, bool add)
     return false;
 }
 
-static void mshv_set_phys_mem(MemoryRegionSection *section, bool add)
+static void mshv_set_phys_mem(MemoryRegionSection *section, bool add,
+                              const char *name)
 {
     MemoryRegion *area = section->mr;
     bool writable = !area->readonly && !area->rom_device;
@@ -99,7 +99,7 @@ static void mshv_set_phys_mem(MemoryRegionSection *section, bool add)
     hwaddr as_offset = section->offset_within_address_space;
     hwaddr region_offset = section->offset_within_region;
 
-    mshv_log("(todo) %s: mem[offset: %lx size: %lx]: %s\n", __func__,
+    mshv_log("(todo) %s(%s): mem[offset: %lx size: %lx]: %s\n", __func__, name,
              section->offset_within_address_space, mem_size,
              area->readonly ? "ronly" : "rw");
     if (!memory_region_is_ram(area)) {
@@ -133,23 +133,38 @@ static void mshv_set_phys_mem(MemoryRegionSection *section, bool add)
         }
     }
 
-    do_mshv_set_memory(&mem, true);
+    if (do_mshv_set_memory(&mem, true)) {
+        error_report("Failed to add mem\n");
+        abort();
+    }
 
-    mshv_log("(todo) %s: mem(%lx)[offset: %lx size: %lx]: %s\n", __func__,
-             add ? mem.guest_phys_addr : 0, as_offset, mem_size,
+    mshv_log("(todo) %s (%s): mem(%lx)[offset: %lx size: %lx]: %s\n", __func__,
+             name, add ? mem.guest_phys_addr : 0, as_offset, mem_size,
              mem.readonly ? "ronly" : "rw");
 }
 
 static void mshv_region_add(MemoryListener *listener,
                             MemoryRegionSection *section)
 {
-    mshv_set_phys_mem(section, true);
+    mshv_set_phys_mem(section, true, "mem-add");
 }
 
 static void mshv_region_del(MemoryListener *listener,
                             MemoryRegionSection *section)
 {
-    mshv_set_phys_mem(section, false);
+    mshv_set_phys_mem(section, false, "mem-del");
+}
+
+static void mshv_io_region_add(MemoryListener *listener,
+                               MemoryRegionSection *section)
+{
+    mshv_set_phys_mem(section, true, "io-add");
+}
+
+static void mshv_io_region_del(MemoryListener *listener,
+                               MemoryRegionSection *section)
+{
+    mshv_set_phys_mem(section, false, "io-del");
 }
 
 static MemoryListener mshv_memory_listener = {
@@ -162,9 +177,20 @@ static MemoryListener mshv_memory_listener = {
     .log_sync = mshv_log_sync,
 };
 
-static void mshv_memory_listener_register(AddressSpace *as)
+static MemoryListener mshv_io_listener = {
+    .name = "mshv",
+    .priority = MEMORY_LISTENER_PRIORITY_ACCEL,
+    .region_add = mshv_io_region_add,
+    .region_del = mshv_io_region_del,
+    .log_start = mshv_log_start,
+    .log_stop = mshv_log_stop,
+    .log_sync = mshv_log_sync,
+};
+
+static void mshv_memory_listener_register(void)
 {
-    memory_listener_register(&mshv_memory_listener, as);
+    memory_listener_register(&mshv_memory_listener, &address_space_memory);
+    memory_listener_register(&mshv_io_listener, &address_space_io);
 }
 
 static int mshv_init(MachineState *ms)
@@ -190,7 +216,7 @@ static int mshv_init(MachineState *ms)
     mc->default_ram_id = NULL;
 
     // register memory listener
-    mshv_memory_listener_register(&address_space_memory);
+    mshv_memory_listener_register();
 
     mshv_state = s;
     return 0;
