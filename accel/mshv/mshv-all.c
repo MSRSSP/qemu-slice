@@ -12,6 +12,8 @@
 #include "sysemu/runstate.h" //vm_stop
 #include "sysemu/stats.h"
 
+#include "target/i386/mshv/mshv-cpu.h"
+
 #include <mshv.h>
 
 #define LOG_MSHV_MASK LOG_GUEST_ERROR
@@ -280,14 +282,11 @@ int mshv_run_vcpu_qemu(CPUState *cpu)
     mshv_debug();
     do {
         if (cpu->vcpu_dirty) {
-            // ret = kvm_arch_put_registers(cpu, KVM_PUT_RUNTIME_STATE);
-            // if (ret) {
+            ret = mshv_arch_put_registers(cpu);
             error_report("Failed to put registers after init: %s",
                          strerror(-ret));
             ret = -1;
             break;
-            //}
-
             cpu->vcpu_dirty = false;
         }
 
@@ -350,6 +349,7 @@ static void *mshv_vcpu_thread_fn(void *arg)
             mshv_debug();
             mshv_run_vcpu_qemu(cpu);
         }
+        mshv_debug();
         qemu_wait_io_event(cpu);
     } while (!cpu->unplug || cpu_can_run(cpu));
 
@@ -374,11 +374,33 @@ static void mshv_start_vcpu_thread(CPUState *cpu)
                        QEMU_THREAD_JOINABLE);
 }
 
+static void mshv_cpu_synchronize_post_init(CPUState *cpu)
+{
+    mshv_arch_put_registers(cpu);
+
+    cpu->vcpu_dirty = false;
+}
+
+static void do_mshv_cpu_synchronize_pre_loadvm(CPUState *cpu,
+                                               run_on_cpu_data arg)
+{
+    cpu->vcpu_dirty = true;
+}
+
+void mshv_cpu_synchronize_pre_loadvm(CPUState *cpu);
+
+void mshv_cpu_synchronize_pre_loadvm(CPUState *cpu)
+{
+    run_on_cpu(cpu, do_mshv_cpu_synchronize_pre_loadvm, RUN_ON_CPU_NULL);
+}
+
 static void mshv_accel_ops_class_init(ObjectClass *oc, void *data)
 {
     AccelOpsClass *ops = ACCEL_OPS_CLASS(oc);
 
     ops->create_vcpu_thread = mshv_start_vcpu_thread;
+    ops->synchronize_post_init = mshv_cpu_synchronize_post_init;
+    ops->synchronize_pre_loadvm = mshv_cpu_synchronize_pre_loadvm;
 }
 
 static const TypeInfo mshv_accel_ops_type = {
