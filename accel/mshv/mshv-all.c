@@ -309,9 +309,9 @@ static void mshv_region_commit(MemoryListener *listener)
     if (need_inhibit) {
         mshv_debug();
         accel_ioctl_inhibit_end();
-         mshv_debug();
+        mshv_debug();
     }
-    mshv_slots_unlock()
+    mshv_slots_unlock();
 
     mshv_debug();
 }
@@ -473,7 +473,7 @@ static int mshv_init(MachineState *ms)
     uint64_t vm_type;
 
     mshv_debug();
-    
+
     qemu_mutex_init(&mml_slots_lock);
     s = MSHV_STATE(ms->accelerator);
 
