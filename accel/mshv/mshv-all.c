@@ -466,7 +466,8 @@ static int mshv_init(MachineState *ms)
     uint64_t vm_type;
 
     mshv_debug();
-
+    
+    qemu_mutex_init(&mml_slots_lock);
     s = MSHV_STATE(ms->accelerator);
 
     accel_blocker_init();
