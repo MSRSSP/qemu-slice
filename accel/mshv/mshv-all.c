@@ -41,15 +41,29 @@ typedef struct MshvMemoryUpdate {
 
 typedef struct MshvMemoryListener {
     MemoryListener listener;
+    MshvMemoryRegion *slots;
+    unsigned int nr_used_slots;
+    int as_id;
     QSIMPLEQ_HEAD(, MshvMemoryUpdate) transaction_add;
     QSIMPLEQ_HEAD(, MshvMemoryUpdate) transaction_del;
 } MshvMemoryListener;
+
+static QemuMutex mml_slots_lock;
+
+#define mshv_slots_lock()   qemu_mutex_lock(&mml_slots_lock)
+#define mshv_slots_unlock() qemu_mutex_unlock(&mml_slots_lock)
 
 typedef struct MshvState {
     AccelState parent_obj;
     MshvHypervisorC *mshv;
     MshvVmC *vm;
+    int nr_slot; // max number of memory region per listener;
     MshvMemoryListener memory_listener;
+    int nr_as; // number of listener;
+    struct MshvAs {
+        MshvMemoryListener *ml;
+        AddressSpace *as;
+    } * as;
 } MshvState;
 
 #define TYPE_MSHV_ACCEL ACCEL_CLASS_NAME("mshv")
@@ -59,6 +73,24 @@ DECLARE_INSTANCE_CHECKER(MshvState, MSHV_STATE, TYPE_MSHV_ACCEL)
 bool mshv_allowed;
 
 MshvState *mshv_state;
+
+static MshvMemoryRegion *mshv_lookup_matching_slot(MshvMemoryListener *mml,
+                                                   hwaddr start_addr,
+                                                   hwaddr size)
+{
+    MshvState *s = mshv_state;
+    int i;
+
+    for (i = 0; i < s->nr_slot; i++) {
+        MshvMemoryRegion *mem = &mml->slots[i];
+
+        if (start_addr == mem->guest_phys_addr && size == mem->memory_size) {
+            return mem;
+        }
+    }
+
+    return NULL;
+}
 
 static void mshv_set_dirty_tracking(MemoryRegionSection *section, bool on)
 {
@@ -95,22 +127,46 @@ static void mshv_log_sync(MemoryListener *listener,
     mshv_set_dirty_tracking(section, 1);
 }
 
-static bool do_mshv_set_memory(const MshvMemoryRegion *mem, bool add)
+static MshvMemoryRegion *mshv_alloc_slot(MshvMemoryListener *mml)
+{
+    int i = 0;
+    while (i < mml->nr_used_slots) {
+        if (mml->slots[i].memory_size == 0) {
+            return &mml->slots[i];
+        }
+    }
+    if (i < mshv_state->nr_slot) {
+        mml->nr_used_slots++;
+        return &mml->slots[i];
+    } else {
+        return NULL;
+    }
+}
+
+static bool do_mshv_set_memory(MshvMemoryListener *mml, MshvMemoryRegion *mem,
+                               bool add)
 {
     if (add) {
         return mshv_add_mem(mshv_state->vm, mem);
+    } else {
+        if (mem != NULL) {
+            mem->memory_size = 0;
+            return mshv_remove_mem(mshv_state->vm, mem);
+        }
     }
     return false;
 }
 
-static void mshv_set_phys_mem(MemoryRegionSection *section, bool add,
+static void mshv_set_phys_mem(MshvMemoryListener *mml,
+                              MemoryRegionSection *section, bool add,
                               const char *name)
 {
     MemoryRegion *area = section->mr;
     bool writable = !area->readonly && !area->rom_device;
     uint64_t page_size = qemu_real_host_page_size();
     uint64_t mem_size = int128_get64(section->size);
-    MshvMemoryRegion mem;
+    uint64_t start_addr;
+    MshvMemoryRegion *mem;
     hwaddr as_offset = section->offset_within_address_space;
     hwaddr region_offset = section->offset_within_region;
 
@@ -135,27 +191,35 @@ static void mshv_set_phys_mem(MemoryRegionSection *section, bool add,
         add = false;
     }
 
-    mem.guest_phys_addr =
+    start_addr =
         (uint64_t)memory_region_get_ram_ptr(area) + (uint64_t)region_offset;
-    mem.memory_size = mem_size;
-    mem.readonly = !writable;
-    mem.userspace_addr = as_offset;
 
     if (!add) {
-        if (do_mshv_set_memory(&mem, false)) {
+        mem = mshv_lookup_matching_slot(mml, start_addr, mem_size);
+        if (!mem) {
+            error_report("Mem not found\n");
+            abort();
+        }
+        if (do_mshv_set_memory(mml, mem, false)) {
             error_report("Failed to remove mem\n");
             abort();
         }
+        return;
     }
 
-    if (do_mshv_set_memory(&mem, true)) {
+    mem = mshv_alloc_slot(mml);
+    mem->guest_phys_addr = start_addr;
+    mem->memory_size = mem_size;
+    mem->readonly = !writable;
+    mem->userspace_addr = as_offset;
+    if (do_mshv_set_memory(mml, mem, true)) {
         error_report("Failed to add mem\n");
         abort();
     }
 
-    mshv_log("(todo) %s (%s): mem(%lx)[offset: %lx size: %lx]: %s\n", __func__,
-             name, add ? mem.guest_phys_addr : 0, as_offset, mem_size,
-             mem.readonly ? "ronly" : "rw");
+    mshv_log("%s (%s): mem(%lx)[offset: %lx size: %lx]: %s\n", __func__, name,
+             add ? start_addr : 0, as_offset, mem_size,
+             mem->readonly ? "ronly" : "rw");
 }
 
 static void mshv_region_add(MemoryListener *listener,
@@ -213,6 +277,7 @@ static void mshv_region_commit(MemoryListener *listener)
         }
     }
 
+    mshv_slots_lock();
     if (need_inhibit) {
         accel_ioctl_inhibit_begin();
     }
@@ -222,7 +287,7 @@ static void mshv_region_commit(MemoryListener *listener)
         u1 = QSIMPLEQ_FIRST(&mml->transaction_del);
         QSIMPLEQ_REMOVE_HEAD(&mml->transaction_del, next);
 
-        mshv_set_phys_mem(&u1->section, false, "remove");
+        mshv_set_phys_mem(mml, &u1->section, false, "remove");
         memory_region_unref(u1->section.mr);
 
         g_free(u1);
@@ -232,7 +297,7 @@ static void mshv_region_commit(MemoryListener *listener)
         QSIMPLEQ_REMOVE_HEAD(&mml->transaction_add, next);
 
         memory_region_ref(u1->section.mr);
-        mshv_set_phys_mem(&u1->section, true, "add");
+        mshv_set_phys_mem(mml, &u1->section, true, "add");
 
         g_free(u1);
     }
@@ -240,6 +305,7 @@ static void mshv_region_commit(MemoryListener *listener)
     if (need_inhibit) {
         accel_ioctl_inhibit_end();
     }
+    mshv_slots_unlock();
 }
 
 static void mshv_region_del(MemoryListener *listener,
@@ -373,14 +439,24 @@ static MemoryListener mshv_io_listener = {
     .coalesced_io_add = mshv_coalesce_mmio_region,
 };
 
-static void mshv_memory_listener_register(void)
+static void mshv_memory_listener_register(MshvState *s, MshvMemoryListener *mml,
+                                          AddressSpace *as, int as_id,
+                                          const char *name)
 {
-    QSIMPLEQ_INIT(&mshv_state->memory_listener.transaction_add);
-    QSIMPLEQ_INIT(&mshv_state->memory_listener.transaction_del);
-    mshv_state->memory_listener.listener = mshv_memory_listener;
-    memory_listener_register(&mshv_state->memory_listener.listener,
-                             &address_space_memory);
-    memory_listener_register(&mshv_io_listener, &address_space_io);
+    int i;
+
+    QSIMPLEQ_INIT(&mml->transaction_add);
+    QSIMPLEQ_INIT(&mml->transaction_del);
+    mml->slots = g_new0(MshvMemoryRegion, mshv_state->nr_slot);
+    mml->listener = mshv_memory_listener;
+    memory_listener_register(&mml->listener, as);
+    for (i = 0; i < s->nr_as; ++i) {
+        if (!s->as[i].as) {
+            s->as[i].as = as;
+            s->as[i].ml = mml;
+            break;
+        }
+    }
 }
 
 static int mshv_init(MachineState *ms)
@@ -407,13 +483,31 @@ static int mshv_init(MachineState *ms)
 
     mc->default_ram_id = NULL;
 
-
+    s->nr_slot = 32;
     mshv_state = s;
-        
+
     // register memory listener
-    mshv_memory_listener_register();
+    mshv_memory_listener_register(s, &s->memory_listener, &address_space_memory,
+                                  0, "mshv-memory");
+    memory_listener_register(&mshv_io_listener, &address_space_io);
 
     return 0;
+}
+
+static bool mshv_accel_has_memory(MachineState *ms, AddressSpace *as,
+                                  hwaddr start_addr, hwaddr size)
+{
+    MshvState *s = mshv_state;
+    int i;
+
+    for (i = 0; i < s->nr_as; ++i) {
+        if (s->as[i].as == as && s->as[i].ml) {
+            return NULL !=
+                   mshv_lookup_matching_slot(s->as[i].ml, start_addr, size);
+        }
+    }
+
+    return false;
 }
 
 static void mshv_accel_class_init(ObjectClass *oc, void *data)
@@ -424,6 +518,7 @@ static void mshv_accel_class_init(ObjectClass *oc, void *data)
     ac->name = "MSHV";
     ac->init_machine = mshv_init;
     ac->allowed = &mshv_allowed;
+    ac->has_memory = mshv_accel_has_memory;
 }
 
 static void mshv_accel_instance_init(Object *obj)
