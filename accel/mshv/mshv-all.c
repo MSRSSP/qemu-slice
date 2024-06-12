@@ -237,7 +237,6 @@ static void mshv_region_add(MemoryListener *listener,
     mshv_log("%s: mem[offset: %lx size: %lx]\n", __func__,
              section->offset_within_address_space, int128_get64(section->size));
     QSIMPLEQ_INSERT_TAIL(&mml->transaction_add, update, next);
-    // mshv_set_phys_mem(section, true, "mem-add");
 }
 
 static void mshv_region_commit(MemoryListener *listener)
@@ -280,6 +279,7 @@ static void mshv_region_commit(MemoryListener *listener)
         }
     }
 
+    mshv_slots_lock();
     if (need_inhibit) {
         accel_ioctl_inhibit_begin();
     }
@@ -304,9 +304,14 @@ static void mshv_region_commit(MemoryListener *listener)
         g_free(u1);
     }
 
+    mshv_debug();
+
     if (need_inhibit) {
+        mshv_debug();
         accel_ioctl_inhibit_end();
+         mshv_debug();
     }
+    mshv_slots_unlock()
 
     mshv_debug();
 }
@@ -323,7 +328,6 @@ static void mshv_region_del(MemoryListener *listener,
     mshv_log("%s: mem[offset: %lx size: %lx]\n", __func__,
              section->offset_within_address_space, int128_get64(section->size));
     QSIMPLEQ_INSERT_TAIL(&mml->transaction_del, update, next);
-    // mshv_set_phys_mem(section, false, "mem-del");
 }
 
 static void mshv_coalesce_mmio_region(MemoryListener *listener,
