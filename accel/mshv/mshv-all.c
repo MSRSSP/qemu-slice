@@ -176,6 +176,7 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
              area->readonly ? "ronly" : "rw");
     if (!memory_region_is_ram(area)) {
         if (writable) {
+            mshv_debug();
             return;
         } else if (!memory_region_is_romd(area)) {
             /*
@@ -205,6 +206,7 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
             mshv_log("Failed to remove mem\n");
             abort();
         }
+        mshv_debug();
         return;
     }
 
@@ -278,7 +280,6 @@ static void mshv_region_commit(MemoryListener *listener)
         }
     }
 
-    mshv_slots_lock();
     if (need_inhibit) {
         accel_ioctl_inhibit_begin();
     }
@@ -306,7 +307,8 @@ static void mshv_region_commit(MemoryListener *listener)
     if (need_inhibit) {
         accel_ioctl_inhibit_end();
     }
-    mshv_slots_unlock();
+
+    mshv_debug();
 }
 
 static void mshv_region_del(MemoryListener *listener,
