@@ -726,7 +726,6 @@ if get_option('kvm').allowed() and host_os == 'linux'
   accelerators += 'CONFIG_KVM'
 endif
 
-accelerators = []
 mshv = not_found
 if get_option('mshv').allowed() and host_os == 'linux'
   mshv = cc.find_library('mshv', required: get_option('mshv'))
