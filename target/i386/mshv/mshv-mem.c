@@ -17,16 +17,21 @@ static MemoryRegion smram_as_mem;
 
 extern MshvState *mshv_state;
 
+static void test() {
+    u8* x = g_malloc0(1);
+    free(x);
+
+}
 static void register_smram_listener(Notifier *n, void *unused)
 {
     MemoryRegion *smram =
         (MemoryRegion *)object_resolve_path("/machine/smram", NULL);
-
+    test();
     /* Outer container... */
     memory_region_init(&smram_as_root, OBJECT(mshv_state),
                        "mem-container-smram", ~0ull);
     memory_region_set_enabled(&smram_as_root, true);
-
+    test();
     /* ... with two regions inside: normal system memory with low
      * priority, and...
      */
@@ -34,14 +39,15 @@ static void register_smram_listener(Notifier *n, void *unused)
                              get_system_memory(), 0, ~0ull);
     memory_region_add_subregion_overlap(&smram_as_root, 0, &smram_as_mem, 0);
     memory_region_set_enabled(&smram_as_mem, true);
-
+    test();
     if (smram) {
         /* ... SMRAM with higher priority */
         memory_region_add_subregion_overlap(&smram_as_root, 0, smram, 10);
         memory_region_set_enabled(smram, true);
     }
-
+    test();
     address_space_init(&smram_address_space, &smram_as_root, "KVM-SMRAM");
+    test();
     mshv_memory_listener_register(mshv_state, &smram_listener,
                                   &smram_address_space, 1, "kvm-smram");
 }
