@@ -35,7 +35,7 @@ typedef struct MshvMemoryUpdate {
 
 typedef struct MshvMemoryListener {
     MemoryListener listener;
-    MshvMemoryRegion *slots;
+    MshvMemoryRegion slots[32];
     unsigned int nr_used_slots;
     int as_id;
     QSIMPLEQ_HEAD(, MshvMemoryUpdate) transaction_add;

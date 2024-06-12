@@ -407,7 +407,6 @@ void mshv_memory_listener_register(MshvState *s, MshvMemoryListener *mml,
 
     QSIMPLEQ_INIT(&mml->transaction_add);
     QSIMPLEQ_INIT(&mml->transaction_del);
-    mml->slots = g_new0(MshvMemoryRegion, mshv_state->nr_slot);
     mml->listener = mshv_memory_listener;
     memory_listener_register(&mml->listener, as);
     for (i = 0; i < s->nr_as; ++i) {
