@@ -11,6 +11,7 @@
 #include "sysemu/cpus.h"
 #include "sysemu/runstate.h" //vm_stop
 #include "sysemu/stats.h"
+#include "sysemu/accel-blocker.h"
 
 #include "target/i386/mshv/mshv-cpu.h"
 
@@ -169,11 +170,105 @@ static void mshv_io_region_del(MemoryListener *listener,
     mshv_set_phys_mem(section, false, "io-del");
 }
 
+static void mshv_coalesce_mmio_region(MemoryListener *listener,
+                                      MemoryRegionSection *secion, hwaddr start,
+                                      hwaddr size)
+{
+    mshv_debug();
+}
+
+static void mshv_mem_ioeventfd_add(MemoryListener *listener,
+                                   MemoryRegionSection *section,
+                                   bool match_data, uint64_t data,
+                                   EventNotifier *e)
+{
+    int fd = event_notifier_get_fd(e);
+    int r;
+    bool is_64 = int128_get64(section->size) > 4;
+
+    mshv_log("%s: io_io[offset: %lx size: %lx]: %lx\n", __func__,
+             section->offset_within_address_space, int128_get64(section->size),
+             data);
+    r = mshv_register_ioevent(mshv_state->vm, fd, true,
+                              section->offset_within_address_space, data, is_64,
+                              match_data);
+    if (r < 0) {
+        fprintf(stderr, "%s: error adding ioeventfd: %s (%d)\n", __func__,
+                strerror(-r), -r);
+        abort();
+    }
+}
+
+static void mshv_mem_ioeventfd_del(MemoryListener *listener,
+                                   MemoryRegionSection *section,
+                                   bool match_data, uint64_t data,
+                                   EventNotifier *e)
+{
+    int fd = event_notifier_get_fd(e);
+    int r;
+    bool is_64 = int128_get64(section->size) > 4;
+
+    mshv_log("%s: io_io[offset: %lx size: %lx]: %lx\n", __func__,
+             section->offset_within_address_space, int128_get64(section->size),
+             data);
+    r = mshv_register_ioevent(mshv_state->vm, fd, true,
+                              section->offset_within_address_space, data, is_64,
+                              match_data);
+    if (r < 0) {
+        fprintf(stderr, "%s: error adding ioeventfd: %s (%d)\n", __func__,
+                strerror(-r), -r);
+        abort();
+    }
+}
+
+static void mshv_io_ioeventfd_add(MemoryListener *listener,
+                                  MemoryRegionSection *section, bool match_data,
+                                  uint64_t data, EventNotifier *e)
+{
+    int fd = event_notifier_get_fd(e);
+    int r;
+    bool is_64 = int128_get64(section->size) > 4 ? true : false;
+
+    mshv_log("%s: io_io[offset: %lx size: %lx]: %lx\n", __func__,
+             section->offset_within_address_space, int128_get64(section->size),
+             data);
+    r = mshv_register_ioevent(mshv_state->vm, fd, false,
+                              section->offset_within_address_space, data, is_64,
+                              match_data);
+    if (r < 0) {
+        fprintf(stderr, "%s: error adding ioeventfd: %s (%d)\n", __func__,
+                strerror(-r), -r);
+        abort();
+    }
+}
+
+static void mshv_io_ioeventfd_del(MemoryListener *listener,
+                                  MemoryRegionSection *section, bool match_data,
+                                  uint64_t data, EventNotifier *e)
+{
+    int fd = event_notifier_get_fd(e);
+    int r;
+
+    mshv_log("%s: io_io[offset: %lx size: %lx]: %lx\n", __func__,
+             section->offset_within_address_space, int128_get64(section->size),
+             data);
+    r = mshv_unregister_ioevent(mshv_state->vm, fd, false,
+                                section->offset_within_address_space);
+    if (r < 0) {
+        fprintf(stderr, "%s: error adding ioeventfd: %s (%d)\n", __func__,
+                strerror(-r), -r);
+        abort();
+    }
+}
+
 static MemoryListener mshv_memory_listener = {
     .name = "mshv",
     .priority = MEMORY_LISTENER_PRIORITY_ACCEL,
     .region_add = mshv_region_add,
     .region_del = mshv_region_del,
+    .eventfd_add = mshv_mem_ioeventfd_add,
+    .eventfd_del = mshv_mem_ioeventfd_del,
+    .coalesced_io_add = mshv_coalesce_mmio_region,
     .log_start = mshv_log_start,
     .log_stop = mshv_log_stop,
     .log_sync = mshv_log_sync,
@@ -184,6 +279,8 @@ static MemoryListener mshv_io_listener = {
     .priority = MEMORY_LISTENER_PRIORITY_ACCEL,
     .region_add = mshv_io_region_add,
     .region_del = mshv_io_region_del,
+    .eventfd_add = mshv_io_ioeventfd_add,
+    .eventfd_del = mshv_io_ioeventfd_del,
     .log_start = mshv_log_start,
     .log_stop = mshv_log_stop,
     .log_sync = mshv_log_sync,
@@ -204,6 +301,8 @@ static int mshv_init(MachineState *ms)
     mshv_debug();
 
     s = MSHV_STATE(ms->accelerator);
+
+    accel_blocker_init();
 
     s->mshv = mshv_new();
     s->vm = NULL;
