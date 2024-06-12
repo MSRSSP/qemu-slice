@@ -146,6 +146,7 @@ static MshvMemoryRegion *mshv_alloc_slot(MshvMemoryListener *mml)
 static bool do_mshv_set_memory(MshvMemoryListener *mml, MshvMemoryRegion *mem,
                                bool add)
 {
+    mshv_debug();
     if (add) {
         return mshv_add_mem(mshv_state->vm, mem);
     } else {
@@ -213,7 +214,7 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
     mem->readonly = !writable;
     mem->userspace_addr = as_offset;
     if (do_mshv_set_memory(mml, mem, true)) {
-        error_report("Failed to add mem\n");
+        mshv_log("Failed to add mem\n");
         abort();
     }
 
