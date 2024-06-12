@@ -12,59 +12,16 @@
 #include "sysemu/runstate.h" //vm_stop
 #include "sysemu/stats.h"
 #include "sysemu/accel-blocker.h"
+#include "sysemu/mshv_int.h"
 
 #include "target/i386/mshv/mshv-cpu.h"
 
 #include <mshv.h>
 
-#define LOG_MSHV_MASK LOG_GUEST_ERROR
-
-#define mshv_log(FMT, ...)                                                     \
-    do {                                                                       \
-        qemu_log_mask(LOG_MSHV_MASK, FMT, ##__VA_ARGS__);                      \
-    } while (0)
-
-#define mshv_debug()                                                           \
-    do {                                                                       \
-        mshv_log("%s:%d\n", __func__, __LINE__);                               \
-    } while (0)
-
-#define mshv_todo()                                                            \
-    do {                                                                       \
-        mshv_log("[todo]%s:%d\n", __func__, __LINE__);                         \
-    } while (0)
-
-typedef struct MshvMemoryUpdate {
-    QSIMPLEQ_ENTRY(MshvMemoryUpdate) next;
-    MemoryRegionSection section;
-} MshvMemoryUpdate;
-
-typedef struct MshvMemoryListener {
-    MemoryListener listener;
-    MshvMemoryRegion *slots;
-    unsigned int nr_used_slots;
-    int as_id;
-    QSIMPLEQ_HEAD(, MshvMemoryUpdate) transaction_add;
-    QSIMPLEQ_HEAD(, MshvMemoryUpdate) transaction_del;
-} MshvMemoryListener;
-
 static QemuMutex mml_slots_lock;
 
 #define mshv_slots_lock()   qemu_mutex_lock(&mml_slots_lock)
 #define mshv_slots_unlock() qemu_mutex_unlock(&mml_slots_lock)
-
-typedef struct MshvState {
-    AccelState parent_obj;
-    MshvHypervisorC *mshv;
-    MshvVmC *vm;
-    int nr_slot; // max number of memory region per listener;
-    MshvMemoryListener memory_listener;
-    int nr_as; // number of listener;
-    struct MshvAs {
-        MshvMemoryListener *ml;
-        AddressSpace *as;
-    } * as;
-} MshvState;
 
 #define TYPE_MSHV_ACCEL ACCEL_CLASS_NAME("mshv")
 
@@ -442,7 +399,7 @@ static MemoryListener mshv_io_listener = {
     .coalesced_io_add = mshv_coalesce_mmio_region,
 };
 
-static void mshv_memory_listener_register(MshvState *s, MshvMemoryListener *mml,
+void mshv_memory_listener_register(MshvState *s, MshvMemoryListener *mml,
                                           AddressSpace *as, int as_id,
                                           const char *name)
 {
@@ -490,7 +447,9 @@ static int mshv_init(MachineState *ms)
     s->nr_slot = 32;
     s->nr_as = 2;
     s->as = g_new0(struct MshvAs, s->nr_as);
+
     mshv_state = s;
+    mshv_arch_init(ms, s);
 
     // register memory listener
     mshv_memory_listener_register(s, &s->memory_listener, &address_space_memory,
