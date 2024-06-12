@@ -335,17 +335,26 @@ static void dummy_signal(int sig)
     mshv_debug();
 }
 
+static int mshv_set_signal_mask(CPUState *cpu, const sigset_t *sigset)
+{
+    mshv_debug();
+
+    return 0;
+}
+
 static void mshv_init_signal(CPUState *cpu)
 {
     /* init cpu signals */
     struct sigaction sigact;
+    sigset_t set;
 
     memset(&sigact, 0, sizeof(sigact));
     sigact.sa_handler = dummy_signal;
     sigaction(SIG_IPI, &sigact, NULL);
 
-    pthread_sigmask(SIG_BLOCK, NULL, &cpu->accel->unblock_ipi_mask);
-    sigdelset(&cpu->accel->unblock_ipi_mask, SIG_IPI);
+    pthread_sigmask(SIG_BLOCK, NULL, &set);
+    sigdelset(&set, SIG_IPI);
+    mshv_set_signal_mask(cpu, &set);
 }
 
 static void *mshv_vcpu_thread_fn(void *arg)
