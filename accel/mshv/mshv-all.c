@@ -407,10 +407,12 @@ static int mshv_init(MachineState *ms)
 
     mc->default_ram_id = NULL;
 
+
+    mshv_state = s;
+        
     // register memory listener
     mshv_memory_listener_register();
 
-    mshv_state = s;
     return 0;
 }
 
