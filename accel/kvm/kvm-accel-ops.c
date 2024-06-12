@@ -26,6 +26,19 @@
 #include <linux/kvm.h>
 #include "kvm-cpus.h"
 
+#include "qemu/log.h"
+#define LOG_MSHV_MASK LOG_GUEST_ERROR
+
+#define kvm_log(FMT, ...)                                                     \
+    do {                                                                       \
+        qemu_log_mask(LOG_MSHV_MASK, FMT, ##__VA_ARGS__);                      \
+    } while (0)
+
+#define kvm_debug()                                                           \
+    do {                                                                       \
+        kvm_log("%s:%d\n", __func__, __LINE__);                               \
+    } while (0)
+
 static void *kvm_vcpu_thread_fn(void *arg)
 {
     CPUState *cpu = arg;
@@ -39,20 +52,24 @@ static void *kvm_vcpu_thread_fn(void *arg)
     current_cpu = cpu;
 
     r = kvm_init_vcpu(cpu, &error_fatal);
-    kvm_init_cpu_signals(cpu);
+    //kvm_init_cpu_signals(cpu);
 
     /* signal CPU creation */
     cpu_thread_signal_created(cpu);
     qemu_guest_random_seed_thread_part2(cpu->random_seed);
 
     do {
+        kvm_debug();
         if (cpu_can_run(cpu)) {
+            kvm_debug();
             r = kvm_cpu_exec(cpu);
             if (r == EXCP_DEBUG) {
                 cpu_handle_guest_debug(cpu);
             }
         }
+        kvm_debug();    
         qemu_wait_io_event(cpu);
+        kvm_debug();
     } while (!cpu->unplug || cpu_can_run(cpu));
 
     kvm_destroy_vcpu(cpu);

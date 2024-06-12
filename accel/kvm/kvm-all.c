@@ -57,6 +57,14 @@
 #include <sys/eventfd.h>
 #endif
 
+#include "qemu/log.h"
+#define LOG_MSHV_MASK LOG_GUEST_ERROR
+
+#define kvm_log(FMT, ...)                                                     \
+    do {                                                                       \
+        qemu_log_mask(LOG_GUEST_ERROR, FMT, ##__VA_ARGS__);                      \
+    } while (0)
+
 /* KVM uses PAGE_SIZE in its definition of KVM_COALESCED_MMIO_MAX. We
  * need to use the real host PAGE_SIZE, as that's what KVM will use.
  */
@@ -1336,7 +1344,8 @@ static void kvm_set_phys_mem(KVMMemoryListener *kml,
     hwaddr start_addr, size, slot_size, mr_offset;
     ram_addr_t ram_start_offset;
     void *ram;
-
+    kvm_log("%s: mem[offset: %lx size: %lx]\n", __func__,
+             section->offset_within_address_space, int128_get64(section->size));
     if (!memory_region_is_ram(mr)) {
         if (writable || !kvm_readonly_mem_allowed) {
             return;
@@ -1568,7 +1577,8 @@ static void kvm_region_add(MemoryListener *listener,
 
     update = g_new0(KVMMemoryUpdate, 1);
     update->section = *section;
-
+    kvm_log("%s: mem[offset: %lx size: %lx]\n", __func__,
+             section->offset_within_address_space, int128_get64(section->size));
     QSIMPLEQ_INSERT_TAIL(&kml->transaction_add, update, next);
 }
 
@@ -1577,7 +1587,8 @@ static void kvm_region_del(MemoryListener *listener,
 {
     KVMMemoryListener *kml = container_of(listener, KVMMemoryListener, listener);
     KVMMemoryUpdate *update;
-
+    kvm_log("(todo) %s: mem[offset: %lx size: %lx]\n", __func__,
+             section->offset_within_address_space, int128_get64(section->size));
     update = g_new0(KVMMemoryUpdate, 1);
     update->section = *section;
 
