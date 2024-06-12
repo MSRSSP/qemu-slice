@@ -197,11 +197,11 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
     if (!add) {
         mem = mshv_lookup_matching_slot(mml, start_addr, mem_size);
         if (!mem) {
-            error_report("Mem not found\n");
+            mshv_log("Mem not found\n");
             abort();
         }
         if (do_mshv_set_memory(mml, mem, false)) {
-            error_report("Failed to remove mem\n");
+            mshv_log("Failed to remove mem\n");
             abort();
         }
         return;
@@ -485,6 +485,8 @@ static int mshv_init(MachineState *ms)
     mc->default_ram_id = NULL;
 
     s->nr_slot = 32;
+    s->nr_as = 2;
+    s->as = g_new0(struct MshvAs, s->nr_as);
     mshv_state = s;
 
     // register memory listener
