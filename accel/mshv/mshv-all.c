@@ -171,10 +171,13 @@ static void mshv_io_region_del(MemoryListener *listener,
 }
 
 static void mshv_coalesce_mmio_region(MemoryListener *listener,
-                                      MemoryRegionSection *secion, hwaddr start,
+                                      MemoryRegionSection *section, hwaddr start,
                                       hwaddr size)
 {
     mshv_debug();
+    mshv_log("%s: mmio[offset: %lx size: %lx]: [%lx %lx]\n", __func__,
+             section->offset_within_address_space, int128_get64(section->size),
+             start, size);
 }
 
 static void mshv_mem_ioeventfd_add(MemoryListener *listener,
