@@ -130,17 +130,12 @@ static void mshv_log_sync(MemoryListener *listener,
 static MshvMemoryRegion *mshv_alloc_slot(MshvMemoryListener *mml)
 {
     int i = 0;
-    while (i < mml->nr_used_slots) {
+   for (i = 0; i < s->nr_slots; i++) {{
         if (mml->slots[i].memory_size == 0) {
             return &mml->slots[i];
         }
     }
-    if (i < mshv_state->nr_slot) {
-        mml->nr_used_slots++;
-        return &mml->slots[i];
-    } else {
-        return NULL;
-    }
+    return NULL;
 }
 
 static bool do_mshv_set_memory(MshvMemoryListener *mml, MshvMemoryRegion *mem,
