@@ -284,6 +284,7 @@ static MemoryListener mshv_io_listener = {
     .region_del = mshv_io_region_del,
     .eventfd_add = mshv_io_ioeventfd_add,
     .eventfd_del = mshv_io_ioeventfd_del,
+    .coalesced_io_add = mshv_coalesce_mmio_region,
     .log_start = mshv_log_start,
     .log_stop = mshv_log_stop,
     .log_sync = mshv_log_sync,
