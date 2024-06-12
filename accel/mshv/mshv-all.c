@@ -186,13 +186,14 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
             add = false;
         }
     }
+    mshv_debug();
 
     if (!QEMU_IS_ALIGNED(int128_get64(section->size), page_size) ||
         !QEMU_IS_ALIGNED(section->offset_within_address_space, page_size)) {
         /* Not page aligned, so we can not map as RAM */
         add = false;
     }
-
+    mshv_debug();
     start_addr =
         (uint64_t)memory_region_get_ram_ptr(area) + (uint64_t)region_offset;
 
