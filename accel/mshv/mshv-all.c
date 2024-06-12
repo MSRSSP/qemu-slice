@@ -161,13 +161,15 @@ static void mshv_region_del(MemoryListener *listener,
 static void mshv_io_region_add(MemoryListener *listener,
                                MemoryRegionSection *section)
 {
-    mshv_set_phys_mem(section, true, "io-add");
+    mshv_debug();
+    //mshv_set_phys_mem(section, true, "io-add");
 }
 
 static void mshv_io_region_del(MemoryListener *listener,
                                MemoryRegionSection *section)
 {
-    mshv_set_phys_mem(section, false, "io-del");
+    mshv_debug();
+    //mshv_set_phys_mem(section, false, "io-del");
 }
 
 static void mshv_coalesce_mmio_region(MemoryListener *listener,
@@ -279,7 +281,7 @@ static MemoryListener mshv_memory_listener = {
 
 static MemoryListener mshv_io_listener = {
     .name = "mshv",
-    .priority = MEMORY_LISTENER_PRIORITY_ACCEL,
+    .priority = MEMORY_LISTENER_PRIORITY_DEV_BACKEND,
     .region_add = mshv_io_region_add,
     .region_del = mshv_io_region_del,
     .eventfd_add = mshv_io_ioeventfd_add,
