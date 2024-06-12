@@ -34,10 +34,22 @@
         mshv_log("[todo]%s:%d\n", __func__, __LINE__);                         \
     } while (0)
 
+typedef struct MshvMemoryUpdate {
+    QSIMPLEQ_ENTRY(MshvMemoryUpdate) next;
+    MemoryRegionSection section;
+} MshvMemoryUpdate;
+
+typedef struct MshvMemoryListener {
+    MemoryListener listener;
+    QSIMPLEQ_HEAD(, MshvMemoryUpdate) transaction_add;
+    QSIMPLEQ_HEAD(, MshvMemoryUpdate) transaction_del;
+} MshvMemoryListener;
+
 typedef struct MshvState {
     AccelState parent_obj;
     MshvHypervisorC *mshv;
     MshvVmC *vm;
+    MshvMemoryListener memory_listener;
 } MshvState;
 
 #define TYPE_MSHV_ACCEL ACCEL_CLASS_NAME("mshv")
@@ -149,32 +161,105 @@ static void mshv_set_phys_mem(MemoryRegionSection *section, bool add,
 static void mshv_region_add(MemoryListener *listener,
                             MemoryRegionSection *section)
 {
-    mshv_set_phys_mem(section, true, "mem-add");
+    MshvMemoryListener *mml =
+        container_of(listener, MshvMemoryListener, listener);
+    MshvMemoryUpdate *update;
+
+    update = g_new0(MshvMemoryUpdate, 1);
+    update->section = *section;
+    mshv_log("%s: mem[offset: %lx size: %lx]\n", __func__,
+             section->offset_within_address_space, int128_get64(section->size));
+    QSIMPLEQ_INSERT_TAIL(&mml->transaction_add, update, next);
+    // mshv_set_phys_mem(section, true, "mem-add");
+}
+
+static void mshv_region_commit(MemoryListener *listener)
+{
+    MshvMemoryListener *mml =
+        container_of(listener, MshvMemoryListener, listener);
+    MshvMemoryUpdate *u1, *u2;
+    bool need_inhibit = false;
+
+    if (QSIMPLEQ_EMPTY(&mml->transaction_add) &&
+        QSIMPLEQ_EMPTY(&mml->transaction_del)) {
+        return;
+    }
+
+    /*
+     * We have to be careful when regions to add overlap with ranges to remove.
+     * We have to simulate atomic KVM memslot updates by making sure no ioctl()
+     * is currently active.
+     *
+     * The lists are order by addresses, so it's easy to find overlaps.
+     */
+    u1 = QSIMPLEQ_FIRST(&mml->transaction_del);
+    u2 = QSIMPLEQ_FIRST(&mml->transaction_add);
+    while (u1 && u2) {
+        Range r1, r2;
+
+        range_init_nofail(&r1, u1->section.offset_within_address_space,
+                          int128_get64(u1->section.size));
+        range_init_nofail(&r2, u2->section.offset_within_address_space,
+                          int128_get64(u2->section.size));
+
+        if (range_overlaps_range(&r1, &r2)) {
+            need_inhibit = true;
+            break;
+        }
+        if (range_lob(&r1) < range_lob(&r2)) {
+            u1 = QSIMPLEQ_NEXT(u1, next);
+        } else {
+            u2 = QSIMPLEQ_NEXT(u2, next);
+        }
+    }
+
+    if (need_inhibit) {
+        accel_ioctl_inhibit_begin();
+    }
+
+    /* Remove all memslots before adding the new ones. */
+    while (!QSIMPLEQ_EMPTY(&mml->transaction_del)) {
+        u1 = QSIMPLEQ_FIRST(&mml->transaction_del);
+        QSIMPLEQ_REMOVE_HEAD(&mml->transaction_del, next);
+
+        mshv_set_phys_mem(&u1->section, false, "remove");
+        memory_region_unref(u1->section.mr);
+
+        g_free(u1);
+    }
+    while (!QSIMPLEQ_EMPTY(&mml->transaction_add)) {
+        u1 = QSIMPLEQ_FIRST(&mml->transaction_add);
+        QSIMPLEQ_REMOVE_HEAD(&mml->transaction_add, next);
+
+        memory_region_ref(u1->section.mr);
+        mshv_set_phys_mem(&u1->section, true, "add");
+
+        g_free(u1);
+    }
+
+    if (need_inhibit) {
+        accel_ioctl_inhibit_end();
+    }
 }
 
 static void mshv_region_del(MemoryListener *listener,
                             MemoryRegionSection *section)
 {
-    mshv_set_phys_mem(section, false, "mem-del");
-}
+    MshvMemoryListener *mml =
+        container_of(listener, MshvMemoryListener, listener);
+    MshvMemoryUpdate *update;
 
-static void mshv_io_region_add(MemoryListener *listener,
-                               MemoryRegionSection *section)
-{
-    mshv_debug();
-    //mshv_set_phys_mem(section, true, "io-add");
-}
-
-static void mshv_io_region_del(MemoryListener *listener,
-                               MemoryRegionSection *section)
-{
-    mshv_debug();
-    //mshv_set_phys_mem(section, false, "io-del");
+    update = g_new0(MshvMemoryUpdate, 1);
+    update->section = *section;
+    mshv_log("%s: mem[offset: %lx size: %lx]\n", __func__,
+             section->offset_within_address_space, int128_get64(section->size));
+    QSIMPLEQ_INSERT_TAIL(&mml->transaction_del, update, next);
+    // mshv_set_phys_mem(section, false, "mem-del");
 }
 
 static void mshv_coalesce_mmio_region(MemoryListener *listener,
-                                      MemoryRegionSection *section, hwaddr start,
-                                      hwaddr size)
+                                      MemoryRegionSection *section,
+                                      hwaddr start, hwaddr size)
 {
     mshv_debug();
     mshv_log("%s: mmio[offset: %lx size: %lx]: [%lx %lx]\n", __func__,
@@ -271,6 +356,7 @@ static MemoryListener mshv_memory_listener = {
     .priority = MEMORY_LISTENER_PRIORITY_ACCEL,
     .region_add = mshv_region_add,
     .region_del = mshv_region_del,
+    .commit = mshv_region_commit,
     .eventfd_add = mshv_mem_ioeventfd_add,
     .eventfd_del = mshv_mem_ioeventfd_del,
     .coalesced_io_add = mshv_coalesce_mmio_region,
@@ -282,19 +368,18 @@ static MemoryListener mshv_memory_listener = {
 static MemoryListener mshv_io_listener = {
     .name = "mshv",
     .priority = MEMORY_LISTENER_PRIORITY_DEV_BACKEND,
-    .region_add = mshv_io_region_add,
-    .region_del = mshv_io_region_del,
     .eventfd_add = mshv_io_ioeventfd_add,
     .eventfd_del = mshv_io_ioeventfd_del,
     .coalesced_io_add = mshv_coalesce_mmio_region,
-    .log_start = mshv_log_start,
-    .log_stop = mshv_log_stop,
-    .log_sync = mshv_log_sync,
 };
 
 static void mshv_memory_listener_register(void)
 {
-    memory_listener_register(&mshv_memory_listener, &address_space_memory);
+    QSIMPLEQ_INIT(&mshv_state->memory_listener.transaction_add);
+    QSIMPLEQ_INIT(&mshv_state->memory_listener.transaction_del);
+    mshv_state->memory_listener.listener = mshv_memory_listener;
+    memory_listener_register(&mshv_state->memory_listener.listener,
+                             &address_space_memory);
     memory_listener_register(&mshv_io_listener, &address_space_io);
 }
 
