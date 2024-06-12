@@ -254,6 +254,8 @@ static const TypeInfo mshv_accel_type = {
 static int mshv_init_vcpu(CPUState *cpu)
 {
     cpu->opaque = (void *)mshv_new_vcpu(mshv_state->vm, cpu->cpu_index);
+    cpu->vcpu_dirty = false;
+
     return 0;
 }
 
@@ -328,7 +330,12 @@ int mshv_run_vcpu_qemu(CPUState *cpu)
     return ret;
 }
 
-stativ void mshv_init_signal(CPUState *cpu)
+static void dummy_signal(int sig)
+{
+    mshv_debug();
+}
+
+static void mshv_init_signal(CPUState *cpu)
 {
     /* init cpu signals */
     struct sigaction sigact;
@@ -353,7 +360,6 @@ static void *mshv_vcpu_thread_fn(void *arg)
     current_cpu = cpu;
     mshv_init_vcpu(cpu);
     mshv_init_signal(cpu);
-    cpu->accel->dirty = true;
 
     /* signal CPU creation */
     cpu_thread_signal_created(cpu);

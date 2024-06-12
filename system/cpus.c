@@ -46,6 +46,7 @@
 #include "hw/boards.h"
 #include "hw/hw.h"
 #include "trace.h"
+#include "qemu/log.h"
 
 #ifdef CONFIG_LINUX
 
