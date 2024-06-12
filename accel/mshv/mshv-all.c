@@ -283,9 +283,6 @@ int mshv_run_vcpu_qemu(CPUState *cpu)
     do {
         if (cpu->vcpu_dirty) {
             ret = mshv_arch_put_registers(cpu);
-            error_report("Failed to put registers after init: %s",
-                         strerror(-ret));
-            ret = -1;
             break;
             cpu->vcpu_dirty = false;
         }
@@ -302,6 +299,7 @@ int mshv_run_vcpu_qemu(CPUState *cpu)
         MshvVmExit exit = mshv_run_vcpu(mshv_cpu, &vector);
         switch (exit) {
         case IoapicEoi:
+            mshv_log("ioapic_eoi_broadcast %d\n", vector);
             ioapic_eoi_broadcast(vector);
             break;
         case Reset:
@@ -310,8 +308,10 @@ int mshv_run_vcpu_qemu(CPUState *cpu)
             ret = EXCP_INTERRUPT;
             break;
         case Ignore:
+            mshv_log("Ignore\n");
             break;
         default:
+            mshv_log("Default\n");
             break;
         }
     } while (ret == 0);
@@ -327,6 +327,20 @@ int mshv_run_vcpu_qemu(CPUState *cpu)
     qatomic_set(&cpu->exit_request, 0);
     return ret;
 }
+
+stativ void mshv_init_signal(CPUState *cpu)
+{
+    /* init cpu signals */
+    struct sigaction sigact;
+
+    memset(&sigact, 0, sizeof(sigact));
+    sigact.sa_handler = dummy_signal;
+    sigaction(SIG_IPI, &sigact, NULL);
+
+    pthread_sigmask(SIG_BLOCK, NULL, &cpu->accel->unblock_ipi_mask);
+    sigdelset(&cpu->accel->unblock_ipi_mask, SIG_IPI);
+}
+
 static void *mshv_vcpu_thread_fn(void *arg)
 {
     CPUState *cpu = arg;
@@ -338,6 +352,8 @@ static void *mshv_vcpu_thread_fn(void *arg)
     cpu->thread_id = qemu_get_thread_id();
     current_cpu = cpu;
     mshv_init_vcpu(cpu);
+    mshv_init_signal(cpu);
+    cpu->accel->dirty = true;
 
     /* signal CPU creation */
     cpu_thread_signal_created(cpu);

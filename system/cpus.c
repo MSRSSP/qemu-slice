@@ -436,6 +436,7 @@ void qemu_wait_io_event_common(CPUState *cpu)
     if (cpu->stop) {
         qemu_cpu_stop(cpu, false);
     }
+    qemu_log_mask(LOG_GUEST_ERROR, "%s\n", __func__);
     process_queued_cpu_work(cpu);
 }
 
