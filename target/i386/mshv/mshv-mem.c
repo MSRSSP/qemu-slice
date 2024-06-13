@@ -85,6 +85,7 @@ bool mshv_arch_init(MachineState *ms, MshvState *s)
      * creating a corresponding e820 entry. We need 4 pages before the BIOS,
      * so this value allows up to 16M BIOSes.
      */
+    mshv_debug();
     identity_base = 0xfeffc000;
     ok = mshv_set_identity_map_address(s->vm, identity_base);
     if (!ok) {
@@ -93,6 +94,7 @@ bool mshv_arch_init(MachineState *ms, MshvState *s)
         return ret;
     }
 
+    mshv_debug();
     /* Set TSS base one page after EPT identity map. */
     ok = mshv_set_tss_address(s->vm, identity_base + 0x1000);
     if (!ok) {
@@ -101,6 +103,7 @@ bool mshv_arch_init(MachineState *ms, MshvState *s)
         return ret;
     }
 
+    mshv_debug();
     /* Tell fw_cfg to notify the BIOS to reserve the range. */
     ret = e820_add_entry(identity_base, 0x4000, E820_RESERVED);
     if (ret < 0) {
@@ -108,12 +111,14 @@ bool mshv_arch_init(MachineState *ms, MshvState *s)
         return ret;
     }
 
+    mshv_debug();
     if (object_dynamic_cast(OBJECT(ms), TYPE_X86_MACHINE) &&
         x86_machine_is_smm_enabled(X86_MACHINE(ms))) {
         smram_machine_done.notify = register_smram_listener;
         qemu_add_machine_init_done_notifier(&smram_machine_done);
     }
 
+    mshv_debug();
     if (object_dynamic_cast(OBJECT(ms), TYPE_X86_MACHINE)) {
         X86MachineState *x86ms = X86_MACHINE(ms);
 
@@ -123,6 +128,6 @@ bool mshv_arch_init(MachineState *ms, MshvState *s)
                                 x86ms->bus_lock_ratelimit, BUS_LOCK_SLICE_TIME);
         }
     }
-
+    mshv_debug();
     return 0;
 }

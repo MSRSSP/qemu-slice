@@ -454,7 +454,7 @@ static int mshv_init(MachineState *ms)
     mshv_memory_listener_register(s, &s->memory_listener, &address_space_memory,
                                   0, "mshv-memory");
     memory_listener_register(&mshv_io_listener, &address_space_io);
-
+    mshv_debug();
     return 0;
 }
 
