@@ -418,6 +418,9 @@ void mshv_memory_listener_register(MshvState *s, MshvMemoryListener *mml,
     }
 }
 
+static void mshv_reset(void *param)
+{}
+
 static int mshv_init(MachineState *ms)
 {
     MachineClass *mc = MACHINE_GET_CLASS(ms);
@@ -449,6 +452,8 @@ static int mshv_init(MachineState *ms)
 
     mshv_state = s;
     mshv_arch_init(ms, s);
+
+    qemu_register_reset(mshv_reset, NULL);
 
     // register memory listener
     mshv_memory_listener_register(s, &s->memory_listener, &address_space_memory,
