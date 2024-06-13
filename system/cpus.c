@@ -437,24 +437,24 @@ void qemu_wait_io_event_common(CPUState *cpu)
     if (cpu->stop) {
         qemu_cpu_stop(cpu, false);
     }
-    qemu_log_mask(LOG_GUEST_ERROR, "%s\n", __func__);
+    qemu_log_mask(LOG_GUEST_ERROR, "%s:%d\n", __FILE__, __LINE__);
     process_queued_cpu_work(cpu);
 }
 
 void qemu_wait_io_event(CPUState *cpu)
 {
     bool slept = false;
-    qemu_log_mask(LOG_GUEST_ERROR, "%s:%d\n", __func__, __FILE__);
+    qemu_log_mask(LOG_GUEST_ERROR, "%s:%d\n", __FILE__, __LINE__);
     while (cpu_thread_is_idle(cpu)) {
         if (!slept) {
             slept = true;
-    qemu_log_mask(LOG_GUEST_ERROR, "%s:%d\n", __func__, __FILE__);
+    qemu_log_mask(LOG_GUEST_ERROR, "%s:%d\n", __FILE__, __LINE__);
             qemu_plugin_vcpu_idle_cb(cpu);
         }
-    qemu_log_mask(LOG_GUEST_ERROR, "%s:%d\n", __func__, __FILE__);
+    qemu_log_mask(LOG_GUEST_ERROR, "%s:%d\n", __FILE__, __LINE__);
         qemu_cond_wait(cpu->halt_cond, &bql);
     }
-        qemu_log_mask(LOG_GUEST_ERROR, "%s:%d\n", __func__, __FILE__);
+        qemu_log_mask(LOG_GUEST_ERROR, "%s:%d\n", __FILE__, __LINE__);
 
     if (slept) {
         qemu_plugin_vcpu_resume_cb(cpu);
