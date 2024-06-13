@@ -676,6 +676,10 @@ void mshv_cpu_synchronize_pre_loadvm(CPUState *cpu)
     run_on_cpu(cpu, do_mshv_cpu_synchronize_pre_loadvm, RUN_ON_CPU_NULL);
 }
 
+static bool mshv_cpus_are_resettable(void) {
+    return false;
+}
+
 static void mshv_accel_ops_class_init(ObjectClass *oc, void *data)
 {
     AccelOpsClass *ops = ACCEL_OPS_CLASS(oc);
@@ -683,6 +687,7 @@ static void mshv_accel_ops_class_init(ObjectClass *oc, void *data)
     ops->create_vcpu_thread = mshv_start_vcpu_thread;
     ops->synchronize_post_init = mshv_cpu_synchronize_post_init;
     ops->synchronize_pre_loadvm = mshv_cpu_synchronize_pre_loadvm;
+    ops->cpus_are_resettable = mshv_cpus_are_resettable;
 }
 
 static const TypeInfo mshv_accel_ops_type = {
