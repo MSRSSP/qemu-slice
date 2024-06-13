@@ -24,7 +24,6 @@
 #include "sysemu/cpus.h"
 #include "qemu/lockable.h"
 #include "trace/trace-root.h"
-#include "qemu/log.h"
 
 QemuMutex qemu_cpu_list_lock;
 static QemuCond exclusive_cond;
@@ -341,7 +340,6 @@ void process_queued_cpu_work(CPUState *cpu)
         qemu_mutex_unlock(&cpu->work_mutex);
         return;
     }
-    qemu_log_mask(LOG_GUEST_ERROR, "%s:%d\n", __func__, __LINE__);
     while (!QSIMPLEQ_EMPTY(&cpu->work_list)) {
         wi = QSIMPLEQ_FIRST(&cpu->work_list);
         QSIMPLEQ_REMOVE_HEAD(&cpu->work_list, node);
@@ -355,12 +353,10 @@ void process_queued_cpu_work(CPUState *cpu)
              */
             bql_unlock();
             start_exclusive();
-    qemu_log_mask(LOG_GUEST_ERROR, "%s:%d\n", __func__, __LINE__);
             wi->func(cpu, wi->data);
             end_exclusive();
             bql_lock();
         } else {
-    qemu_log_mask(LOG_GUEST_ERROR, "%s:%d\n", __func__, __LINE__);
             wi->func(cpu, wi->data);
         }
         qemu_mutex_lock(&cpu->work_mutex);
@@ -371,7 +367,6 @@ void process_queued_cpu_work(CPUState *cpu)
         }
     }
     qemu_mutex_unlock(&cpu->work_mutex);
-    qemu_log_mask(LOG_GUEST_ERROR, "%s:%d\n", __func__, __LINE__);
     qemu_cond_broadcast(&qemu_work_cond);
 }
 
