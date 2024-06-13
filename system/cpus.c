@@ -444,14 +444,18 @@ void qemu_wait_io_event_common(CPUState *cpu)
 void qemu_wait_io_event(CPUState *cpu)
 {
     bool slept = false;
-
+    qemu_log_mask(LOG_GUEST_ERROR, "%s:%d\n", __func__, __FILE__);
     while (cpu_thread_is_idle(cpu)) {
         if (!slept) {
             slept = true;
+    qemu_log_mask(LOG_GUEST_ERROR, "%s:%d\n", __func__, __FILE__);
             qemu_plugin_vcpu_idle_cb(cpu);
         }
+    qemu_log_mask(LOG_GUEST_ERROR, "%s:%d\n", __func__, __FILE__);
         qemu_cond_wait(cpu->halt_cond, &bql);
     }
+        qemu_log_mask(LOG_GUEST_ERROR, "%s:%d\n", __func__, __FILE__);
+
     if (slept) {
         qemu_plugin_vcpu_resume_cb(cpu);
     }
