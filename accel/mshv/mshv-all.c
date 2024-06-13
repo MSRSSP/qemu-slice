@@ -13,7 +13,7 @@
 #include "sysemu/stats.h"
 #include "sysemu/accel-blocker.h"
 #include "sysemu/mshv_int.h"
-#include "sysemu/reset.h"//register reset
+#include "sysemu/reset.h" //register reset
 
 #include "target/i386/mshv/mshv-cpu.h"
 
@@ -398,8 +398,8 @@ static MemoryListener mshv_io_listener = {
 };
 
 void mshv_memory_listener_register(MshvState *s, MshvMemoryListener *mml,
-                                          AddressSpace *as, int as_id,
-                                          const char *name)
+                                   AddressSpace *as, int as_id,
+                                   const char *name)
 {
     int i;
 
@@ -417,8 +417,7 @@ void mshv_memory_listener_register(MshvState *s, MshvMemoryListener *mml,
     }
 }
 
-static void mshv_reset(void *param)
-{}
+static void mshv_reset(void *param) {}
 
 static int mshv_init(MachineState *ms)
 {
@@ -537,8 +536,9 @@ int mshv_run_vcpu_qemu(CPUState *cpu)
     do {
         if (cpu->vcpu_dirty) {
             ret = mshv_arch_put_registers(cpu);
-            break;
-            cpu->vcpu_dirty = false;
+            if (ret) {
+                cpu->vcpu_dirty = false;
+            }
         }
 
         if (qatomic_read(&cpu->exit_request)) {
@@ -550,6 +550,7 @@ int mshv_run_vcpu_qemu(CPUState *cpu)
          */
         smp_rmb();
 
+        mshv_debug();
         MshvVmExit exit = mshv_run_vcpu(mshv_cpu, &vector);
         switch (exit) {
         case IoapicEoi:
@@ -568,6 +569,7 @@ int mshv_run_vcpu_qemu(CPUState *cpu)
             mshv_log("Default\n");
             break;
         }
+        mshv_debug();
     } while (ret == 0);
 
     cpu_exec_end(cpu);
@@ -677,7 +679,8 @@ void mshv_cpu_synchronize_pre_loadvm(CPUState *cpu)
     run_on_cpu(cpu, do_mshv_cpu_synchronize_pre_loadvm, RUN_ON_CPU_NULL);
 }
 
-static bool mshv_cpus_are_resettable(void) {
+static bool mshv_cpus_are_resettable(void)
+{
     return false;
 }
 
