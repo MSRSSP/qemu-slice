@@ -289,9 +289,6 @@ static void mshv_coalesce_mmio_region(MemoryListener *listener,
                                       hwaddr start, hwaddr size)
 {
     mshv_debug();
-    mshv_log("%s: mmio[offset: %lx size: %lx]: [%lx %lx]\n", __func__,
-             section->offset_within_address_space, int128_get64(section->size),
-             start, size);
 }
 
 static void mshv_mem_ioeventfd_add(MemoryListener *listener,
@@ -425,7 +422,6 @@ static void mshv_reset(void *param)
 
 static int mshv_init(MachineState *ms)
 {
-    MachineClass *mc = MACHINE_GET_CLASS(ms);
     MshvState *s;
     uint64_t vm_type;
 
@@ -445,8 +441,6 @@ static int mshv_init(MachineState *ms)
         mshv_debug();
         s->vm = mshv_create_vm_with_type(s->mshv, vm_type);
     } while (s->vm == NULL);
-
-    mc->default_ram_id = NULL;
 
     s->nr_slot = 32;
     s->nr_as = 2;

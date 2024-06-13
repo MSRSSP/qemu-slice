@@ -1577,7 +1577,7 @@ static void kvm_region_add(MemoryListener *listener,
 
     update = g_new0(KVMMemoryUpdate, 1);
     update->section = *section;
-    kvm_log("%s: mem[offset: %lx size: %lx]\n", __func__,
+    kvm_log("%s(%s): mem[offset: %lx size: %lx]\n", __func__, listener->name,
              section->offset_within_address_space, int128_get64(section->size));
     QSIMPLEQ_INSERT_TAIL(&kml->transaction_add, update, next);
 }
