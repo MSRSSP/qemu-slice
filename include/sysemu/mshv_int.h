@@ -58,6 +58,6 @@ typedef struct MshvState {
 bool mshv_arch_init(MachineState *ms, MshvState *s);
 
 void mshv_memory_listener_register(MshvState *s, MshvMemoryListener *mml,
-                                          AddressSpace *as, int as_id,
-                                          const char *name);
+                                   AddressSpace *as, int as_id,
+                                   const char *name);
 #endif

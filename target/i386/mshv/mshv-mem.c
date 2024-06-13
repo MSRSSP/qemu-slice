@@ -49,8 +49,6 @@ static RateLimit bus_lock_ratelimit_ctrl;
 
 bool mshv_arch_init(MachineState *ms, MshvState *s)
 {
-    struct utsname utsname;
-
     /*
      * Initialize SEV context, if required
     if (ms->cgs) {
@@ -62,26 +60,19 @@ bool mshv_arch_init(MachineState *ms, MshvState *s)
     }
     */
 
-    uname(&utsname);
-
-    /*
-     * On older Intel CPUs, KVM uses vm86 mode to emulate 16-bit code directly.
-     * In order to use vm86 mode, an EPT identity map and a TSS  are needed.
-     * Since these must be part of guest physical memory, we need to allocate
-     * them, both by setting their start addresses in the kernel and by
-     * creating a corresponding e820 entry. We need 4 pages before the BIOS,
-     * so this value allows up to 16M BIOSes.
-     */
+    // TODO(ziqiao): check whether it is necessary.
+    // It seems a duplicated with address_space_mem listener.
     smram_machine_done.notify = register_smram_listener;
     qemu_add_machine_init_done_notifier(&smram_machine_done);
 
     mshv_debug();
     X86MachineState *x86ms = X86_MACHINE(ms);
 
+    // TODO(ziqiao): seems not useful
     if (x86ms->bus_lock_ratelimit > 0) {
         ratelimit_init(&bus_lock_ratelimit_ctrl);
-        ratelimit_set_speed(&bus_lock_ratelimit_ctrl,
-                            x86ms->bus_lock_ratelimit, BUS_LOCK_SLICE_TIME);
+        ratelimit_set_speed(&bus_lock_ratelimit_ctrl, x86ms->bus_lock_ratelimit,
+                            BUS_LOCK_SLICE_TIME);
     }
     mshv_debug();
     return 0;
