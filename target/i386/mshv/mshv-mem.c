@@ -59,9 +59,6 @@ static RateLimit bus_lock_ratelimit_ctrl;
 
 bool mshv_arch_init(MachineState *ms, MshvState *s)
 {
-    uint64_t identity_base = 0xfffbc000;
-    int ret;
-    bool ok;
     struct utsname utsname;
 
     /*
