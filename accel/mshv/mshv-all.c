@@ -13,6 +13,7 @@
 #include "sysemu/stats.h"
 #include "sysemu/accel-blocker.h"
 #include "sysemu/mshv_int.h"
+#include "sysemu/reset.h"//register reset
 
 #include "target/i386/mshv/mshv-cpu.h"
 
