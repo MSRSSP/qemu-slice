@@ -188,7 +188,7 @@ static void mshv_region_add(MemoryListener *listener,
 
     update = g_new0(MshvMemoryUpdate, 1);
     update->section = *section;
-    mshv_log("%s: mem[offset: %lx size: %lx]\n", __func__,
+    mshv_log("%s(%s): mem[offset: %lx size: %lx]\n", __func__, listener->name,
              section->offset_within_address_space, int128_get64(section->size));
     QSIMPLEQ_INSERT_TAIL(&mml->transaction_add, update, next);
 }
@@ -409,6 +409,7 @@ void mshv_memory_listener_register(MshvState *s, MshvMemoryListener *mml,
     QSIMPLEQ_INIT(&mml->transaction_add);
     QSIMPLEQ_INIT(&mml->transaction_del);
     mml->listener = mshv_memory_listener;
+    mml->listener.name = name;
     memory_listener_register(&mml->listener, as);
     for (i = 0; i < s->nr_as; ++i) {
         if (!s->as[i].as) {

@@ -17,22 +17,15 @@ static MemoryRegion smram_as_mem;
 
 extern MshvState *mshv_state;
 
-static uint64_t *test(void) {
-    return g_malloc0(4);
-}
-
 static void register_smram_listener(Notifier *n, void *unused)
 {
-    uint64_t *x;
     mshv_debug();
     MemoryRegion *smram =
         (MemoryRegion *)object_resolve_path("/machine/smram", NULL);
-    x = test();
     /* Outer container... */
     memory_region_init(&smram_as_root, OBJECT(mshv_state),
                        "mem-container-smram", ~0ull);
     memory_region_set_enabled(&smram_as_root, true);
-    if (x) {x=test();}
     /* ... with two regions inside: normal system memory with low
      * priority, and...
      */
@@ -40,15 +33,12 @@ static void register_smram_listener(Notifier *n, void *unused)
                              get_system_memory(), 0, ~0ull);
     memory_region_add_subregion_overlap(&smram_as_root, 0, &smram_as_mem, 0);
     memory_region_set_enabled(&smram_as_mem, true);
-    if (x) {x=test();}
     if (smram) {
         /* ... SMRAM with higher priority */
         memory_region_add_subregion_overlap(&smram_as_root, 0, smram, 10);
         memory_region_set_enabled(smram, true);
     }
-    if (x) {x=test();}
     address_space_init(&smram_address_space, &smram_as_root, "KVM-SMRAM");
-    if (x) {x=test();}
     mshv_memory_listener_register(mshv_state, &smram_listener,
                                   &smram_address_space, 1, "kvm-smram");
     mshv_debug();
@@ -82,23 +72,16 @@ bool mshv_arch_init(MachineState *ms, MshvState *s)
      * creating a corresponding e820 entry. We need 4 pages before the BIOS,
      * so this value allows up to 16M BIOSes.
      */
+    smram_machine_done.notify = register_smram_listener;
+    qemu_add_machine_init_done_notifier(&smram_machine_done);
 
     mshv_debug();
-    if (object_dynamic_cast(OBJECT(ms), TYPE_X86_MACHINE) &&
-        x86_machine_is_smm_enabled(X86_MACHINE(ms))) {
-        smram_machine_done.notify = register_smram_listener;
-        qemu_add_machine_init_done_notifier(&smram_machine_done);
-    }
+    X86MachineState *x86ms = X86_MACHINE(ms);
 
-    mshv_debug();
-    if (object_dynamic_cast(OBJECT(ms), TYPE_X86_MACHINE)) {
-        X86MachineState *x86ms = X86_MACHINE(ms);
-
-        if (x86ms->bus_lock_ratelimit > 0) {
-            ratelimit_init(&bus_lock_ratelimit_ctrl);
-            ratelimit_set_speed(&bus_lock_ratelimit_ctrl,
-                                x86ms->bus_lock_ratelimit, BUS_LOCK_SLICE_TIME);
-        }
+    if (x86ms->bus_lock_ratelimit > 0) {
+        ratelimit_init(&bus_lock_ratelimit_ctrl);
+        ratelimit_set_speed(&bus_lock_ratelimit_ctrl,
+                            x86ms->bus_lock_ratelimit, BUS_LOCK_SLICE_TIME);
     }
     mshv_debug();
     return 0;
