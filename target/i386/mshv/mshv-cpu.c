@@ -3,7 +3,7 @@
 #include "cpu.h"
 
 #include "mshv.h"
-#include "mshv-cpu.h"
+#include "sysemu/mshv_int.h"
 
 inline static MshvVcpuC *mshv_vcpu(CPUState *cpu)
 {
@@ -27,7 +27,7 @@ static void set_seg(struct SegmentRegisterC *lhs, const SegmentCache *rhs)
     lhs->unusable = !lhs->present;
 }
 
-int mshv_arch_put_registers(CPUState *cpu)
+int mshv_arch_put_registers(MshvState *mshv_state, CPUState *cpu)
 {
     X86CPU *x86cpu = X86_CPU(cpu);
     assert(cpu_is_stopped(cpu) || qemu_cpu_is_self(cpu));
@@ -72,7 +72,11 @@ int mshv_arch_put_registers(CPUState *cpu)
     FpuStateC fpu;
     memset(&fpu, 0, sizeof(fpu));
 
-    mshv_configure_vcpu(mshv_vcpu(cpu), &regs, &sregs, &fpu);
+    mshv_configure_vcpu(mshv_state->mshv, mshv_vcpu(cpu), cpu->cpu_index,
+                        IS_AMD_CPU(env) ? AMD
+                                        : (IS_INTEL_CPU(env) ? Intel : Unknown),
+                        env->nr_dies, cpu->nr_cores / env->nr_dies,
+                        cpu->nr_threads, &regs, &sregs, &fpu);
 
     return 0;
 }

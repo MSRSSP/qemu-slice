@@ -15,8 +15,6 @@
 #include "sysemu/mshv_int.h"
 #include "sysemu/reset.h" //register reset
 
-#include "target/i386/mshv/mshv-cpu.h"
-
 #include <mshv.h>
 
 static QemuMutex mml_slots_lock;
@@ -535,7 +533,7 @@ int mshv_run_vcpu_qemu(CPUState *cpu)
     mshv_debug();
     do {
         if (cpu->vcpu_dirty) {
-            ret = mshv_arch_put_registers(cpu);
+            ret = mshv_arch_put_registers(mshv_state, cpu);
             if (ret) {
                 cpu->vcpu_dirty = false;
             }
@@ -661,7 +659,7 @@ static void mshv_start_vcpu_thread(CPUState *cpu)
 
 static void mshv_cpu_synchronize_post_init(CPUState *cpu)
 {
-    mshv_arch_put_registers(cpu);
+    mshv_arch_put_registers(mshv_state, cpu);
 
     cpu->vcpu_dirty = false;
 }
