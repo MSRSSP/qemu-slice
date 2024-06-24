@@ -483,6 +483,18 @@ static void mshv_accel_class_init(ObjectClass *oc, void *data)
     ac->has_memory = mshv_accel_has_memory;
 }
 
+static void mshv_accel_instance_end(Object *obj) {
+    MshvState *s = MSHV_STATE(obj);
+    int i = 0;
+    mshv_debug();
+    for (i = 0; i < 64; i ++) {
+        if(s->vcpus[i] != NULL) {
+            mshv_log("cpu %d:\n", i);
+            mshv_dump_vcpu(mshv_state->vcpus[i]);
+        }
+    }
+    mshv_debug();
+}
 static void mshv_accel_instance_init(Object *obj)
 {
     MshvState *s = MSHV_STATE(obj);
@@ -498,6 +510,7 @@ static const TypeInfo mshv_accel_type = {
     .instance_init = mshv_accel_instance_init,
     .class_init = mshv_accel_class_init,
     .instance_size = sizeof(MshvState),
+    .instance_finalize = mshv_accel_instance_end,
 };
 
 static int mshv_init_vcpu(CPUState *cpu)
@@ -627,6 +640,7 @@ static void *mshv_vcpu_thread_fn(void *arg)
     qemu_guest_random_seed_thread_part2(cpu->random_seed);
 
     mshv_log("%s:%d: cpu = %d\n", __func__, __LINE__, cpu->cpu_index);
+    mshv_state->vcpus[cpu->cpu_index] = mshv_vcpu(cpu);
     do {
         if (cpu_can_run(cpu)) {
             mshv_debug();
@@ -679,7 +693,7 @@ void mshv_cpu_synchronize_pre_loadvm(CPUState *cpu)
 
 static bool mshv_cpus_are_resettable(void)
 {
-    return false;
+    return true;
 }
 
 static void mshv_accel_ops_class_init(ObjectClass *oc, void *data)

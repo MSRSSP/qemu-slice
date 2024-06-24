@@ -46,6 +46,7 @@ typedef struct MshvState {
     AccelState parent_obj;
     MshvHypervisorC *mshv;
     MshvVmC *vm;
+    MshvVcpuC *vcpus[64];
     int nr_slot; // max number of memory region per listener;
     MshvMemoryListener memory_listener;
     int nr_as; // number of listener;
