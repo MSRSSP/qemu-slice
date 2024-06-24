@@ -2831,6 +2831,7 @@ static void kvm_getput_reg(__u64 *kvm_reg, target_ulong *qemu_reg, int set)
     }
 }
 
+#include "qemu/log.h"
 static int kvm_getput_regs(X86CPU *cpu, int set)
 {
     CPUX86State *env = &cpu->env;
@@ -2865,7 +2866,6 @@ static int kvm_getput_regs(X86CPU *cpu, int set)
 
     kvm_getput_reg(&regs.rflags, &env->eflags, set);
     kvm_getput_reg(&regs.rip, &env->eip, set);
-
     if (set) {
         ret = kvm_vcpu_ioctl(CPU(cpu), KVM_SET_REGS, &regs);
     }
@@ -2931,9 +2931,14 @@ static int kvm_put_sregs(X86CPU *cpu)
 
     sregs.idt.limit = env->idt.limit;
     sregs.idt.base = env->idt.base;
+
     memset(sregs.idt.padding, 0, sizeof sregs.idt.padding);
     sregs.gdt.limit = env->gdt.limit;
     sregs.gdt.base = env->gdt.base;
+    qemu_log_mask(LOG_GUEST_ERROR, "idt limit %lx, base = %lx\n", (uint64_t)env->idt.limit, (uint64_t)env->idt.base);
+
+    qemu_log_mask(LOG_GUEST_ERROR, "gdt limit %lx, base = %lx\n", (uint64_t)env->gdt.limit, (uint64_t)env->gdt.base);
+
     memset(sregs.gdt.padding, 0, sizeof sregs.gdt.padding);
 
     sregs.cr0 = env->cr[0];
@@ -2982,7 +2987,9 @@ static int kvm_put_sregs2(X86CPU *cpu)
     sregs.gdt.limit = env->gdt.limit;
     sregs.gdt.base = env->gdt.base;
     memset(sregs.gdt.padding, 0, sizeof sregs.gdt.padding);
+qemu_log_mask(LOG_GUEST_ERROR, "idt limit %lx, base = %lx\n", (uint64_t)env->idt.limit, (uint64_t)env->idt.base);
 
+    qemu_log_mask(LOG_GUEST_ERROR, "gdt limit %lx, base = %lx\n", (uint64_t)env->gdt.limit, (uint64_t)env->gdt.base);
     sregs.cr0 = env->cr[0];
     sregs.cr2 = env->cr[2];
     sregs.cr3 = env->cr[3];
@@ -3311,6 +3318,8 @@ static int kvm_put_msrs(X86CPU *cpu, int level)
     kvm_msr_entry_add(cpu, MSR_IA32_SYSENTER_CS, env->sysenter_cs);
     kvm_msr_entry_add(cpu, MSR_IA32_SYSENTER_ESP, env->sysenter_esp);
     kvm_msr_entry_add(cpu, MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
+
+    qemu_log_mask(LOG_GUEST_ERROR, "EIP = %lx, sysenter_eip = %lx", env->eip, env->sysenter_eip);
     kvm_msr_entry_add(cpu, MSR_PAT, env->pat);
     if (has_msr_star) {
         kvm_msr_entry_add(cpu, MSR_STAR, env->star);

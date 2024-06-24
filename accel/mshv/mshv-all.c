@@ -582,8 +582,8 @@ int mshv_run_vcpu_qemu(CPUState *cpu)
         smp_rmb();
 
         mshv_debug();
-        MshvVmExit exit = mshv_run_vcpu(mshv_cpu, &vector);
         mshv_dump_vcpu(mshv_cpu, cpu->cpu_index);
+        MshvVmExit exit = mshv_run_vcpu(mshv_cpu, &vector);
         switch (exit) {
         case IoapicEoi:
             mshv_log("ioapic_eoi_broadcast %d\n", vector);
