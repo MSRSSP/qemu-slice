@@ -483,18 +483,37 @@ static void mshv_accel_class_init(ObjectClass *oc, void *data)
     ac->has_memory = mshv_accel_has_memory;
 }
 
-static void mshv_accel_instance_end(Object *obj) {
-    MshvState *s = MSHV_STATE(obj);
+void mshv_dump_states(int cpu_index);
+void mshv_dump_states(int cpu_index)
+{
+    MshvState *s = mshv_state;
     int i = 0;
     mshv_debug();
-    for (i = 0; i < 64; i ++) {
-        if(s->vcpus[i] != NULL) {
+    if (cpu_index >= 0) {
+        mshv_log("cpu %d:\n", i);
+        mshv_dump_vcpu(mshv_state->vcpus[i]);
+        return;
+    }
+
+    for (i = 0; i < 64; i++) {
+        if (s->vcpus[i] != NULL) {
             mshv_log("cpu %d:\n", i);
             mshv_dump_vcpu(mshv_state->vcpus[i]);
         }
     }
     mshv_debug();
 }
+
+static void *mshv_dump_states_fn(void *args)
+{
+    int cpu_index = (int64_t)args;
+    for (int i = 0; i < 3; i++) {
+        sleep(10);
+        mshv_dump_states(cpu_index);
+    }
+    return NULL;
+}
+
 static void mshv_accel_instance_init(Object *obj)
 {
     MshvState *s = MSHV_STATE(obj);
@@ -510,7 +529,6 @@ static const TypeInfo mshv_accel_type = {
     .instance_init = mshv_accel_instance_init,
     .class_init = mshv_accel_class_init,
     .instance_size = sizeof(MshvState),
-    .instance_finalize = mshv_accel_instance_end,
 };
 
 static int mshv_init_vcpu(CPUState *cpu)
@@ -663,12 +681,17 @@ static void mshv_start_vcpu_thread(CPUState *cpu)
 
     cpu->thread = g_malloc0(sizeof(QemuThread));
     cpu->halt_cond = g_malloc0(sizeof(QemuCond));
+
+    char thread_name2[VCPU_THREAD_NAME_SIZE];
+    QemuThread *t = g_malloc0(sizeof(QemuThread));
     qemu_cond_init(cpu->halt_cond);
 
     mshv_log("%s: thread_name = %s, cpu = %d\n", __func__, thread_name,
              cpu->cpu_index);
     qemu_thread_create(cpu->thread, thread_name, mshv_vcpu_thread_fn, cpu,
                        QEMU_THREAD_JOINABLE);
+    qemu_thread_create(t, thread_name2, mshv_dump_states_fn,
+                       (void *)(uint64_t)cpu->cpu_index, QEMU_THREAD_JOINABLE);
 }
 
 static void mshv_cpu_synchronize_post_init(CPUState *cpu)
