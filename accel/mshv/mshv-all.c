@@ -487,23 +487,24 @@ void mshv_dump_states(int cpu_index);
 void mshv_dump_states(int cpu_index)
 {
     MshvState *s = mshv_state;
-    int i = 0;
+    uint8_t i = 0;
     mshv_debug();
     if (cpu_index >= 0) {
         mshv_log("cpu %d:\n", i);
-        mshv_dump_vcpu(mshv_state->vcpus[i]);
+        mshv_dump_vcpu(mshv_state->vcpus[cpu_index], cpu_index);
         return;
     }
 
     for (i = 0; i < 64; i++) {
         if (s->vcpus[i] != NULL) {
             mshv_log("cpu %d:\n", i);
-            mshv_dump_vcpu(mshv_state->vcpus[i]);
+            mshv_dump_vcpu(mshv_state->vcpus[i], i);
         }
     }
     mshv_debug();
 }
 
+/*
 static void *mshv_dump_states_fn(void *args)
 {
     int cpu_index = (int64_t)args;
@@ -513,6 +514,7 @@ static void *mshv_dump_states_fn(void *args)
     }
     return NULL;
 }
+*/
 
 static void mshv_accel_instance_init(Object *obj)
 {
@@ -581,6 +583,7 @@ int mshv_run_vcpu_qemu(CPUState *cpu)
 
         mshv_debug();
         MshvVmExit exit = mshv_run_vcpu(mshv_cpu, &vector);
+        mshv_dump_vcpu(mshv_cpu, cpu->cpu_index);
         switch (exit) {
         case IoapicEoi:
             mshv_log("ioapic_eoi_broadcast %d\n", vector);
@@ -682,16 +685,16 @@ static void mshv_start_vcpu_thread(CPUState *cpu)
     cpu->thread = g_malloc0(sizeof(QemuThread));
     cpu->halt_cond = g_malloc0(sizeof(QemuCond));
 
-    char thread_name2[VCPU_THREAD_NAME_SIZE];
-    QemuThread *t = g_malloc0(sizeof(QemuThread));
+    //char thread_name2[VCPU_THREAD_NAME_SIZE];
+    //QemuThread *t = g_malloc0(sizeof(QemuThread));
     qemu_cond_init(cpu->halt_cond);
 
     mshv_log("%s: thread_name = %s, cpu = %d\n", __func__, thread_name,
              cpu->cpu_index);
     qemu_thread_create(cpu->thread, thread_name, mshv_vcpu_thread_fn, cpu,
                        QEMU_THREAD_JOINABLE);
-    qemu_thread_create(t, thread_name2, mshv_dump_states_fn,
-                       (void *)(uint64_t)cpu->cpu_index, QEMU_THREAD_JOINABLE);
+    //qemu_thread_create(t, thread_name2, mshv_dump_states_fn,
+    //                   (void *)(uint64_t)cpu->cpu_index, QEMU_THREAD_JOINABLE);
 }
 
 static void mshv_cpu_synchronize_post_init(CPUState *cpu)
