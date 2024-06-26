@@ -79,6 +79,8 @@ static int mshv_getput_regs(MshvState *mshv_state, CPUState *cpu, bool set)
     getput_reg(&regs.rdi, &env->regs[R_EDI], set);
     getput_reg(&regs.rsp, &env->regs[R_ESP], set);
     getput_reg(&regs.rbp, &env->regs[R_EBP], set);
+    getput_reg(&regs.rflags, &env->eflags, set);
+    getput_reg(&regs.rip, &env->eip, set);
 
     getset_seg(&sregs.cs, &env->segs[R_CS], set);
     getset_seg(&sregs.ds, &env->segs[R_DS], set);
@@ -124,7 +126,9 @@ int mshv_put_vcpu_events(MshvState *mshv_state, CPUState *cpu)
     X86CPU *x86cpu = X86_CPU(cpu);
     CPUX86State *env = &x86cpu->env;
 
-    if (env->nmi_injected && env->nmi_pending) {
+    if (env->nmi_injected) {
+        mshv_debug();
+        mshv_log("mshv_nmi\n");
         mshv_nmi(mshv_vcpu(cpu));
     }
 
@@ -133,7 +137,19 @@ int mshv_put_vcpu_events(MshvState *mshv_state, CPUState *cpu)
 
 int mshv_arch_put_registers(MshvState *mshv_state, CPUState *cpu)
 {
-    return mshv_getput_regs(mshv_state, cpu, true);
+    int ret = 0;
+
+    ret = mshv_getput_regs(mshv_state, cpu, true);
+    if (ret) {
+        return ret;
+    }
+
+    ret = mshv_put_vcpu_events(mshv_state, cpu);
+    if (ret) {
+        return ret;
+    }
+
+    return ret;
 }
 
 int mshv_arch_get_registers(MshvState *mshv_state, CPUState *cpu);
