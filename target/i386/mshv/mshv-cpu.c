@@ -27,56 +27,118 @@ static void set_seg(struct SegmentRegisterC *lhs, const SegmentCache *rhs)
     lhs->unusable = !lhs->present;
 }
 
-int mshv_arch_put_registers(MshvState *mshv_state, CPUState *cpu)
+static void get_seg(SegmentCache *lhs, const struct SegmentRegisterC *rhs)
+{
+    lhs->selector = rhs->selector;
+    lhs->base = rhs->base;
+    lhs->limit = rhs->limit;
+    lhs->flags = (rhs->type_ << DESC_TYPE_SHIFT) |
+                 ((rhs->present && !rhs->unusable) * DESC_P_MASK) |
+                 (rhs->dpl << DESC_DPL_SHIFT) | (rhs->db << DESC_B_SHIFT) |
+                 (rhs->s * DESC_S_MASK) | (rhs->l << DESC_L_SHIFT) |
+                 (rhs->g * DESC_G_MASK) | (rhs->avl * DESC_AVL_MASK);
+}
+
+static void getset_seg(struct SegmentRegisterC *lhs, SegmentCache *rhs,
+                       bool set)
+{
+    if (set) {
+        set_seg(lhs, (const SegmentCache *)rhs);
+    } else {
+        get_seg(rhs, (const struct SegmentRegisterC *)lhs);
+    }
+}
+
+static void getput_reg(uint64_t *reg, target_ulong *qemu_reg, bool set)
+{
+    if (set) {
+        *reg = *qemu_reg;
+    } else {
+        *qemu_reg = *reg;
+    }
+}
+
+static int mshv_getput_regs(MshvState *mshv_state, CPUState *cpu, bool set)
 {
     X86CPU *x86cpu = X86_CPU(cpu);
-    assert(cpu_is_stopped(cpu) || qemu_cpu_is_self(cpu));
-
     CPUX86State *env = &x86cpu->env;
-
-    StandardRegistersC regs = {
-        .rax = env->regs[R_EAX],
-        .rbx = env->regs[R_EBX],
-        .rcx = env->regs[R_ECX],
-        .rdx = env->regs[R_EDX],
-        .rsi = env->regs[R_ESI],
-        .rdi = env->regs[R_EDI],
-        .rsp = env->regs[R_ESP],
-        .rbp = env->regs[R_EBP],
-        .rflags = env->eflags,
-        .rip = env->eip,
-    };
+    StandardRegistersC regs;
     SpecialRegistersC sregs;
-    set_seg(&sregs.cs, &env->segs[R_CS]);
-    set_seg(&sregs.ds, &env->segs[R_DS]);
-    set_seg(&sregs.es, &env->segs[R_ES]);
-    set_seg(&sregs.fs, &env->segs[R_FS]);
-    set_seg(&sregs.gs, &env->segs[R_GS]);
-    set_seg(&sregs.ss, &env->segs[R_SS]);
+    FpuStateC fpu;
+    int ret = 0;
+
+    if (!set) {
+        mshv_get_vcpu(mshv_vcpu(cpu), &regs, &sregs, &fpu);
+    }
+
+    getput_reg(&regs.rax, &env->regs[R_EAX], set);
+    getput_reg(&regs.rbx, &env->regs[R_EBX], set);
+    getput_reg(&regs.rcx, &env->regs[R_ECX], set);
+    getput_reg(&regs.rdx, &env->regs[R_EDX], set);
+    getput_reg(&regs.rsi, &env->regs[R_ESI], set);
+    getput_reg(&regs.rdi, &env->regs[R_EDI], set);
+    getput_reg(&regs.rsp, &env->regs[R_ESP], set);
+    getput_reg(&regs.rbp, &env->regs[R_EBP], set);
+
+    getset_seg(&sregs.cs, &env->segs[R_CS], set);
+    getset_seg(&sregs.ds, &env->segs[R_DS], set);
+    getset_seg(&sregs.es, &env->segs[R_ES], set);
+    getset_seg(&sregs.fs, &env->segs[R_FS], set);
+    getset_seg(&sregs.gs, &env->segs[R_GS], set);
+    getset_seg(&sregs.ss, &env->segs[R_SS], set);
 
     sregs.idt.limit = env->idt.limit;
     sregs.idt.base = env->idt.base;
     sregs.gdt.limit = env->gdt.limit;
     sregs.gdt.base = env->gdt.base;
 
-    sregs.cr0 = env->cr[0];
-    sregs.cr2 = env->cr[2];
-    sregs.cr3 = env->cr[3];
-    sregs.cr4 = env->cr[4];
+    getput_reg(&sregs.cr0, &env->cr[0], set);
+    getput_reg(&sregs.cr2, &env->cr[2], set);
+    getput_reg(&sregs.cr3, &env->cr[3], set);
+    getput_reg(&sregs.cr4, &env->cr[4], set);
 
-    sregs.cr8 = cpu_get_apic_tpr(x86cpu->apic_state);
-    sregs.efer = env->efer;
-    sregs.apic_base = cpu_get_apic_base(x86cpu->apic_state);
-    memset(&sregs.interrupt_bitmap, 0, sizeof(sregs.interrupt_bitmap));
+    getput_reg(&sregs.efer, &env->efer, set);
 
-    FpuStateC fpu;
-    memset(&fpu, 0, sizeof(fpu));
+    if (set) {
+        sregs.cr8 = cpu_get_apic_tpr(x86cpu->apic_state);
+        sregs.apic_base = cpu_get_apic_base(x86cpu->apic_state);
+        memset(&sregs.interrupt_bitmap, 0, sizeof(sregs.interrupt_bitmap));
+        memset(&fpu, 0, sizeof(fpu));
+        mshv_configure_vcpu(
+            mshv_state->mshv, mshv_vcpu(cpu), cpu->cpu_index,
+            IS_AMD_CPU(env) ? AMD : (IS_INTEL_CPU(env) ? Intel : Unknown),
+            env->nr_dies, cpu->nr_cores / env->nr_dies, cpu->nr_threads, &regs,
+            &sregs, env->xcr0, &fpu);
+    } else {
+        cpu_set_apic_tpr(x86cpu->apic_state, sregs.cr8);
+        cpu_set_apic_base(x86cpu->apic_state, sregs.apic_base);
+    }
 
-    mshv_configure_vcpu(mshv_state->mshv, mshv_vcpu(cpu), cpu->cpu_index,
-                        IS_AMD_CPU(env) ? AMD
-                                        : (IS_INTEL_CPU(env) ? Intel : Unknown),
-                        env->nr_dies, cpu->nr_cores / env->nr_dies,
-                        cpu->nr_threads, &regs, &sregs, &fpu);
+    return ret;
+}
+
+int mshv_put_vcpu_events(MshvState *mshv_state, CPUState *cpu);
+
+int mshv_put_vcpu_events(MshvState *mshv_state, CPUState *cpu)
+{
+    X86CPU *x86cpu = X86_CPU(cpu);
+    CPUX86State *env = &x86cpu->env;
+
+    if (env->nmi_injected && env->nmi_pending) {
+        mshv_nmi(mshv_vcpu(cpu));
+    }
 
     return 0;
+}
+
+int mshv_arch_put_registers(MshvState *mshv_state, CPUState *cpu)
+{
+    return mshv_getput_regs(mshv_state, cpu, true);
+}
+
+int mshv_arch_get_registers(MshvState *mshv_state, CPUState *cpu);
+
+int mshv_arch_get_registers(MshvState *mshv_state, CPUState *cpu)
+{
+    return mshv_getput_regs(mshv_state, cpu, true);
 }
