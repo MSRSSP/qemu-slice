@@ -439,6 +439,7 @@ static int mshv_init(MachineState *ms)
         s->vm = mshv_create_vm_with_type(s->mshv, vm_type);
     } while (s->vm == NULL);
 
+    mshv_vm_resume(s->vm);
     s->nr_slot = 32;
     s->nr_as = 2;
     s->as = g_new0(struct MshvAs, s->nr_as);
