@@ -100,16 +100,17 @@ static MshvMemoryRegion *mshv_alloc_slot(MshvMemoryListener *mml)
 static int do_mshv_set_memory(MshvMemoryListener *mml, MshvMemoryRegion *mem,
                               bool add)
 {
-    mshv_debug();
+    int ret = 0;
+
     if (add) {
-        return mshv_add_mem(mshv_state->vm, mem);
+        ret = mshv_add_mem(mshv_state->vm, mem);
     } else {
         if (mem != NULL) {
+            ret = mshv_remove_mem(mshv_state->vm, mem);
             mem->memory_size = 0;
-            return mshv_remove_mem(mshv_state->vm, mem);
         }
     }
-    return false;
+    return ret;
 }
 
 /*
@@ -188,7 +189,11 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
             abort();
         }
         if (do_mshv_set_memory(mml, mem, false)) {
-            mshv_log("Failed to remove mem\n");
+            mshv_log("remove(failed) %s(%s): mem[start_addr: %lx, ram: %lx, "
+                     "ram_start_offset: %lx, size: %lx]: %s\n",
+                     __func__, name, start_addr, (uint64_t)ram,
+                     (uint64_t)ram_start_offset, mem_size,
+                     area->readonly ? "ronly" : "rw");
             abort();
         }
         mshv_debug();
@@ -211,7 +216,7 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
     mem->readonly = !writable;
     mem->userspace_addr = (uint64_t)ram;
     if (do_mshv_set_memory(mml, mem, true)) {
-        mshv_log("(failed) %s(%s): mem[start_addr: %lx, ram: %lx, "
+        mshv_log("add(failed) %s(%s): mem[start_addr: %lx, ram: %lx, "
                  "ram_start_offset: %lx, size: %lx]: %s\n",
                  __func__, name, start_addr, (uint64_t)ram,
                  (uint64_t)ram_start_offset, mem_size,
