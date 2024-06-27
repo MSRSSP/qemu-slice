@@ -187,8 +187,8 @@ static int mshv_set_phys_mem(MshvMemoryListener *mml,
         }
 
         ret = (do_mshv_set_memory(mml, mem, false));
-        if (ret != 17) {
-            // ignore failed
+        if (ret != 0 && ret != 17) {
+            // ignore duplicated range
             goto err;
         }
 
@@ -210,14 +210,14 @@ static int mshv_set_phys_mem(MshvMemoryListener *mml,
     mem->memory_size = mem_size;
     mem->readonly = !writable;
     mem->userspace_addr = (uint64_t)ram;
-    ret = do_mshv_set_memory(mml, mem, true);
 
-    if (ret) {
-        if (ret != 17) {
-            // ignore failed
-            goto err;
-        }
+    ret = do_mshv_set_memory(mml, mem, true);
+    if (ret != 0 && ret != 17) {
+        // ignore duplicated range
+        // ignore failed
+        goto err;
     }
+
 ok:
     mshv_log(
         "[ok(%d)] %s(%s): mem[start_addr: %lx, ram: %lx, ram_start_offset: "
