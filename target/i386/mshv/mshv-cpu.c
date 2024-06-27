@@ -3,6 +3,7 @@
 #include "cpu.h"
 
 #include "mshv.h"
+#include <linux/kvm.h>
 #include "sysemu/mshv_int.h"
 
 inline static MshvVcpuC *mshv_vcpu(CPUState *cpu)
@@ -135,11 +136,78 @@ int mshv_put_vcpu_events(MshvState *mshv_state, CPUState *cpu)
     return 0;
 }
 
+#define MSR_ENTRIES_COUNT 64
+static void mshv_msr_buf_alloc(X86CPU *cpu)
+{
+    u_int64_t size = sizeof(uint64_t) + sizeof(MsrEntryC) * MSR_ENTRIES_COUNT;
+    cpu->kvm_msr_buf = g_malloc0(size);
+    memset(cpu->kvm_msr_buf, 0, size);
+}
+
+static MsrEntryC *mshv_msr_entry_add(X86CPU *cpu, uint32_t index,
+                                     uint64_t value)
+{
+    struct kvm_msrs *msrs = cpu->kvm_msr_buf;
+    struct kvm_msr_entry *entry = &msrs->entries[msrs->nmsrs];
+
+    assert(sizeof(MsrEntryC) == sizeof(struct kvm_msr_entry));
+    assert(msrs->nmsrs < MSR_ENTRIES_COUNT);
+
+    entry->index = index;
+    entry->reserved = 0;
+    entry->data = value;
+    msrs->nmsrs++;
+
+    return (MsrEntryC *)entry;
+}
+
+/*
+msr!(msr_index::MSR_IA32_SYSENTER_CS),
+msr!(msr_index::MSR_IA32_SYSENTER_ESP),
+msr!(msr_index::MSR_IA32_SYSENTER_EIP),
+msr!(msr_index::MSR_STAR),
+msr!(msr_index::MSR_CSTAR),
+msr!(msr_index::MSR_LSTAR),
+msr!(msr_index::MSR_KERNEL_GS_BASE),
+msr!(msr_index::MSR_SYSCALL_MASK),
+msr_data!(msr_index::MSR_MTRRdefType, MTRR_ENABLE | MTRR_MEM_TYPE_WB),
+*/
+static int mshv_put_msrs(CPUState *cpu)
+{
+    X86CPU *x86cpu = X86_CPU(cpu);
+    CPUX86State *env = &x86cpu->env;
+    MsrEntryC *msrs;
+    mshv_msr_buf_alloc(x86cpu);
+    mshv_msr_entry_add(x86cpu, MSR_IA32_SYSENTER_CS, env->sysenter_cs);
+    mshv_msr_entry_add(x86cpu, MSR_IA32_SYSENTER_ESP, env->sysenter_esp);
+    mshv_msr_entry_add(x86cpu, MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
+    mshv_msr_entry_add(x86cpu, MSR_PAT, env->pat);
+    mshv_msr_entry_add(x86cpu, MSR_STAR, env->star);
+    mshv_msr_entry_add(x86cpu, MSR_CSTAR, env->cstar);
+    mshv_msr_entry_add(x86cpu, MSR_LSTAR, env->lstar);
+    mshv_msr_entry_add(x86cpu, MSR_KERNELGSBASE, env->kernelgsbase);
+    mshv_msr_entry_add(x86cpu, MSR_FMASK, env->fmask);
+    mshv_msr_entry_add(x86cpu, MSR_VM_HSAVE_PA, env->vm_hsave);
+    mshv_msr_entry_add(x86cpu, MSR_TSC_AUX, env->tsc_aux);
+    mshv_msr_entry_add(x86cpu, MSR_TSC_ADJUST, env->tsc_adjust);
+    mshv_msr_entry_add(x86cpu, MSR_IA32_SMBASE, env->smbase);
+    msrs = mshv_msr_entry_add(x86cpu, MSR_IA32_SPEC_CTRL, env->spec_ctrl);
+    mshv_configure_msr(mshv_vcpu(cpu), msrs,
+                       (uint32_t)x86cpu->kvm_msr_buf->nmsrs);
+
+    return 0;
+}
+
 int mshv_arch_put_registers(MshvState *mshv_state, CPUState *cpu)
 {
     int ret = 0;
 
     ret = mshv_getput_regs(mshv_state, cpu, true);
+    if (ret) {
+        return ret;
+    }
+
+    ret = mshv_put_msrs(cpu);
     if (ret) {
         return ret;
     }
