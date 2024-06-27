@@ -136,9 +136,9 @@ static hwaddr kvm_align_section(MemoryRegionSection *section, hwaddr *start)
     return (size - delta) & qemu_real_host_page_mask();
 }
 
-static void mshv_set_phys_mem(MshvMemoryListener *mml,
-                              MemoryRegionSection *section, bool add,
-                              const char *name)
+static int mshv_set_phys_mem(MshvMemoryListener *mml,
+                             MemoryRegionSection *section, bool add,
+                             const char *name)
 {
     MemoryRegion *area = section->mr;
     bool writable = !area->readonly && !area->rom_device;
@@ -149,10 +149,11 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
     hwaddr mr_offset, size;
     ram_addr_t ram_start_offset;
     void *ram;
+    int ret = 0;
 
     if (!memory_region_is_ram(area)) {
         if (writable) {
-            return;
+            return ret;
         } else if (!memory_region_is_romd(area)) {
             /*
              * If the memory device is not in romd_mode, then we actually want
@@ -164,7 +165,7 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
 
     size = kvm_align_section(section, &start_addr);
     if (!size) {
-        return;
+        return ret;
     }
 
     mr_offset = section->offset_within_region + start_addr -
@@ -181,17 +182,22 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
     mem = mshv_lookup_matching_slot(mml, start_addr, mem_size);
     if (!add) {
         if (!mem) {
+            ret = 1;
             goto err;
         }
-        if (do_mshv_set_memory(mml, mem, false)) {
+
+        ret = (do_mshv_set_memory(mml, mem, false));
+        if (ret != 17) {
+            // ignore failed
             goto err;
         }
+
         goto ok;
     }
 
     // The memory region is already added and so skip the request.
     if (mem) {
-        return;
+        return ret;
     }
 
     mshv_log("[todo] %s(%s): mem[start_addr: %lx, ram: %lx, ram_start_offset: "
@@ -204,20 +210,25 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
     mem->memory_size = mem_size;
     mem->readonly = !writable;
     mem->userspace_addr = (uint64_t)ram;
-    if (do_mshv_set_memory(mml, mem, true)) {
-        goto err;
+    ret = do_mshv_set_memory(mml, mem, true);
+
+    if (ret) {
+        if (ret != 17) {
+            // ignore failed
+            goto err;
+        }
     }
 ok:
-    mshv_log("[ok] %s(%s): mem[start_addr: %lx, ram: %lx, ram_start_offset: "
-             "%lx, size: %lx]: %s\n",
-             __func__, name, start_addr, (uint64_t)ram,
-             (uint64_t)ram_start_offset, mem_size,
-             area->readonly ? "ronly" : "rw");
-    return;
+    mshv_log(
+        "[ok(%d)] %s(%s): mem[start_addr: %lx, ram: %lx, ram_start_offset: "
+        "%lx, size: %lx]: %s\n",
+        ret, __func__, name, start_addr, (uint64_t)ram,
+        (uint64_t)ram_start_offset, mem_size, area->readonly ? "ronly" : "rw");
+    return ret;
 err:
-    mshv_log("[failed] %s(%s): mem[start_addr: %lx, ram: %lx, "
+    mshv_log("[failed %d] %s(%s): mem[start_addr: %lx, ram: %lx, "
              "ram_start_offset: %lx, size: %lx]: %s\n",
-             __func__, name, start_addr, (uint64_t)ram,
+             ret, __func__, name, start_addr, (uint64_t)ram,
              (uint64_t)ram_start_offset, mem_size,
              area->readonly ? "ronly" : "rw");
     abort();
