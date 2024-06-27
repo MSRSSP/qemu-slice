@@ -12,10 +12,17 @@
 #include <mshv.h>
 
 #define LOG_MSHV_MASK LOG_GUEST_ERROR
+#define LOG_MSHV_ERR_MASK LOG_GUEST_ERROR
 
 #define mshv_log(FMT, ...)                                                     \
     do {                                                                       \
         qemu_log_mask(LOG_MSHV_MASK, FMT, ##__VA_ARGS__);                      \
+    } while (0)
+
+
+#define mshv_err(FMT, ...)                                                     \
+    do {                                                                       \
+        qemu_log_mask(LOG_MSHV_ERR_MASK, FMT, ##__VA_ARGS__);                      \
     } while (0)
 
 #define mshv_debug()                                                           \

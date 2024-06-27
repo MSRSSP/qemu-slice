@@ -188,6 +188,12 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
             mshv_log("Mem not found\n");
             abort();
         }
+        mshv_log(
+            "(todo) %s(%s): mem[start_addr: %lx, ram: %lx, ram_start_offset: "
+            "%lx, size: %lx]: %s\n",
+            __func__, name, start_addr, (uint64_t)ram,
+            (uint64_t)ram_start_offset, mem_size,
+            area->readonly ? "ronly" : "rw");
         if (do_mshv_set_memory(mml, mem, false)) {
             mshv_log("remove(failed) %s(%s): mem[start_addr: %lx, ram: %lx, "
                      "ram_start_offset: %lx, size: %lx]: %s\n",
@@ -216,12 +222,12 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
     mem->readonly = !writable;
     mem->userspace_addr = (uint64_t)ram;
     if (do_mshv_set_memory(mml, mem, true)) {
-        mshv_log("add(failed) %s(%s): mem[start_addr: %lx, ram: %lx, "
+        mshv_err("add(failed) %s(%s): mem[start_addr: %lx, ram: %lx, "
                  "ram_start_offset: %lx, size: %lx]: %s\n",
                  __func__, name, start_addr, (uint64_t)ram,
                  (uint64_t)ram_start_offset, mem_size,
                  area->readonly ? "ronly" : "rw");
-        abort();
+        // abort();
     }
 }
 
