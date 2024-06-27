@@ -94,7 +94,7 @@ static MshvMemoryRegion *mshv_alloc_slot(MshvMemoryListener *mml)
     return NULL;
 }
 
-static bool do_mshv_set_memory(MshvMemoryListener *mml, MshvMemoryRegion *mem,
+static int do_mshv_set_memory(MshvMemoryListener *mml, MshvMemoryRegion *mem,
                                bool add)
 {
     mshv_debug();
@@ -178,9 +178,8 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
 
     ram = memory_region_get_ram_ptr(area) + mr_offset;
     ram_start_offset = memory_region_get_ram_addr(area) + mr_offset;
-
+    mem = mshv_lookup_matching_slot(mml, start_addr, mem_size);
     if (!add) {
-        mem = mshv_lookup_matching_slot(mml, start_addr, mem_size);
         if (!mem) {
             mshv_log("Mem not found\n");
             abort();
@@ -193,6 +192,11 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
         return;
     }
 
+    // The memory region is already added and so skip the request.
+    if (mem) {
+        return;
+    }
+
     mshv_log("(todo) %s(%s): mem[start_addr: %lx, ram: %lx, ram_start_offset: "
              "%lx, size: %lx]: %s\n",
              __func__, name, start_addr, (uint64_t)ram,
@@ -202,9 +206,8 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
     mem->guest_phys_addr = start_addr;
     mem->memory_size = mem_size;
     mem->readonly = !writable;
-    mem->userspace_addr = ram_start_offset;
+    mem->userspace_addr = (uint64_t)ram;
     if (do_mshv_set_memory(mml, mem, true)) {
-        mshv_log("Failed to add mem\n");
         mshv_log("(failed) %s(%s): mem[start_addr: %lx, ram: %lx, "
                  "ram_start_offset: %lx, size: %lx]: %s\n",
                  __func__, name, start_addr, (uint64_t)ram,
