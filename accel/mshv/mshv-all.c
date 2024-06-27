@@ -183,7 +183,7 @@ static int mshv_set_phys_mem(MshvMemoryListener *mml,
     if (!add) {
         if (!mem) {
             ret = 1;
-            goto err;
+            goto ok;
         }
 
         ret = (do_mshv_set_memory(mml, mem, false));
@@ -200,11 +200,11 @@ static int mshv_set_phys_mem(MshvMemoryListener *mml,
         return ret;
     }
 
-    mshv_log("[todo] %s(%s): mem[start_addr: %lx, ram: %lx, ram_start_offset: "
-             "%lx, size: %lx]: %s\n",
-             __func__, name, start_addr, (uint64_t)ram,
-             (uint64_t)ram_start_offset, mem_size,
-             area->readonly ? "ronly" : "rw");
+    mshv_log(
+        "[todo] %s(%s)(%s): mem[start_addr: %lx, ram: %lx, ram_start_offset: "
+        "%lx, size: %lx]: %s\n",
+        __func__, name, mml->listener.name, start_addr, (uint64_t)ram,
+        (uint64_t)ram_start_offset, mem_size, area->readonly ? "ronly" : "rw");
     mem = mshv_alloc_slot(mml);
     mem->guest_phys_addr = start_addr;
     mem->memory_size = mem_size;
@@ -220,9 +220,9 @@ static int mshv_set_phys_mem(MshvMemoryListener *mml,
 
 ok:
     mshv_log(
-        "[ok(%d)] %s(%s): mem[start_addr: %lx, ram: %lx, ram_start_offset: "
+        "[ok(%d)] %s(%s)(%s): mem[start_addr: %lx, ram: %lx, ram_start_offset: "
         "%lx, size: %lx]: %s\n",
-        ret, __func__, name, start_addr, (uint64_t)ram,
+        ret, __func__, name, mml->listener.name, start_addr, (uint64_t)ram,
         (uint64_t)ram_start_offset, mem_size, area->readonly ? "ronly" : "rw");
     return ret;
 err:
