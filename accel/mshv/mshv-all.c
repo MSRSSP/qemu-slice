@@ -109,6 +109,29 @@ static bool do_mshv_set_memory(MshvMemoryListener *mml, MshvMemoryRegion *mem,
     return false;
 }
 
+/*
+ * Calculate and align the start address and the size of the section.
+ * Return the size. If the size is 0, the aligned section is empty.
+ */
+static hwaddr kvm_align_section(MemoryRegionSection *section, hwaddr *start)
+{
+    hwaddr size = int128_get64(section->size);
+    hwaddr delta, aligned;
+
+    /* kvm works in page size chunks, but the function may be called
+       with sub-page size and unaligned start address. Pad the start
+       address to next and truncate size to previous page boundary. */
+    aligned = ROUND_UP(section->offset_within_address_space,
+                       qemu_real_host_page_size());
+    delta = aligned - section->offset_within_address_space;
+    *start = aligned;
+    if (delta > size) {
+        return 0;
+    }
+
+    return (size - delta) & qemu_real_host_page_mask();
+}
+
 static void mshv_set_phys_mem(MshvMemoryListener *mml,
                               MemoryRegionSection *section, bool add,
                               const char *name)
@@ -117,14 +140,12 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
     bool writable = !area->readonly && !area->rom_device;
     uint64_t page_size = qemu_real_host_page_size();
     uint64_t mem_size = int128_get64(section->size);
-    uint64_t start_addr;
+    hwaddr start_addr;
     MshvMemoryRegion *mem;
-    hwaddr as_offset = section->offset_within_address_space;
-    hwaddr region_offset = section->offset_within_region;
+    hwaddr mr_offset, size;
+    ram_addr_t ram_start_offset;
+    void *ram;
 
-    mshv_log("(todo) %s(%s): mem[offset: %lx size: %lx]: %s\n", __func__, name,
-             section->offset_within_address_space, mem_size,
-             area->readonly ? "ronly" : "rw");
     if (!memory_region_is_ram(area)) {
         if (writable) {
             mshv_debug();
@@ -137,6 +158,15 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
             add = false;
         }
     }
+
+    size = kvm_align_section(section, &start_addr);
+    if (!size) {
+        return;
+    }
+
+    mr_offset = section->offset_within_region + start_addr -
+                section->offset_within_address_space;
+
     mshv_debug();
 
     if (!QEMU_IS_ALIGNED(int128_get64(section->size), page_size) ||
@@ -145,8 +175,9 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
         add = false;
     }
     mshv_debug();
-    start_addr =
-        (uint64_t)memory_region_get_ram_ptr(area) + (uint64_t)region_offset;
+
+    ram = memory_region_get_ram_ptr(area) + mr_offset;
+    ram_start_offset = memory_region_get_ram_addr(area) + mr_offset;
 
     if (!add) {
         mem = mshv_lookup_matching_slot(mml, start_addr, mem_size);
@@ -162,19 +193,25 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
         return;
     }
 
+    mshv_log("(todo) %s(%s): mem[start_addr: %lx, ram: %lx, ram_start_offset: "
+             "%lx, size: %lx]: %s\n",
+             __func__, name, start_addr, (uint64_t)ram,
+             (uint64_t)ram_start_offset, mem_size,
+             area->readonly ? "ronly" : "rw");
     mem = mshv_alloc_slot(mml);
     mem->guest_phys_addr = start_addr;
     mem->memory_size = mem_size;
     mem->readonly = !writable;
-    mem->userspace_addr = as_offset;
+    mem->userspace_addr = ram_start_offset;
     if (do_mshv_set_memory(mml, mem, true)) {
         mshv_log("Failed to add mem\n");
+        mshv_log("(failed) %s(%s): mem[start_addr: %lx, ram: %lx, "
+                 "ram_start_offset: %lx, size: %lx]: %s\n",
+                 __func__, name, start_addr, (uint64_t)ram,
+                 (uint64_t)ram_start_offset, mem_size,
+                 area->readonly ? "ronly" : "rw");
         abort();
     }
-
-    mshv_log("%s (%s): mem(%lx)[offset: %lx size: %lx]: %s\n", __func__, name,
-             add ? start_addr : 0, as_offset, mem_size,
-             mem->readonly ? "ronly" : "rw");
 }
 
 static void mshv_region_add(MemoryListener *listener,
@@ -686,16 +723,17 @@ static void mshv_start_vcpu_thread(CPUState *cpu)
     cpu->thread = g_malloc0(sizeof(QemuThread));
     cpu->halt_cond = g_malloc0(sizeof(QemuCond));
 
-    //char thread_name2[VCPU_THREAD_NAME_SIZE];
-    //QemuThread *t = g_malloc0(sizeof(QemuThread));
+    // char thread_name2[VCPU_THREAD_NAME_SIZE];
+    // QemuThread *t = g_malloc0(sizeof(QemuThread));
     qemu_cond_init(cpu->halt_cond);
 
     mshv_log("%s: thread_name = %s, cpu = %d\n", __func__, thread_name,
              cpu->cpu_index);
     qemu_thread_create(cpu->thread, thread_name, mshv_vcpu_thread_fn, cpu,
                        QEMU_THREAD_JOINABLE);
-    //qemu_thread_create(t, thread_name2, mshv_dump_states_fn,
-    //                   (void *)(uint64_t)cpu->cpu_index, QEMU_THREAD_JOINABLE);
+    // qemu_thread_create(t, thread_name2, mshv_dump_states_fn,
+    //                    (void *)(uint64_t)cpu->cpu_index,
+    //                    QEMU_THREAD_JOINABLE);
 }
 
 static void mshv_cpu_synchronize_post_init(CPUState *cpu)

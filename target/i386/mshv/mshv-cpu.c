@@ -142,19 +142,20 @@ static void mshv_msr_buf_alloc(X86CPU *cpu)
     u_int64_t size = sizeof(uint64_t) + sizeof(MsrEntryC) * MSR_ENTRIES_COUNT;
     cpu->kvm_msr_buf = g_malloc0(size);
     memset(cpu->kvm_msr_buf, 0, size);
+    cpu->kvm_msr_buf->nmsrs = 0;
 }
 
 static MsrEntryC *mshv_msr_entry_add(X86CPU *cpu, uint32_t index,
                                      uint64_t value)
 {
     struct kvm_msrs *msrs = cpu->kvm_msr_buf;
-    struct kvm_msr_entry *entry = &msrs->entries[msrs->nmsrs];
+    struct MsrEntryC *entry = (MsrEntryC *)&msrs->entries[msrs->nmsrs];
 
     assert(sizeof(MsrEntryC) == sizeof(struct kvm_msr_entry));
     assert(msrs->nmsrs < MSR_ENTRIES_COUNT);
 
     entry->index = index;
-    entry->reserved = 0;
+    entry->resvd = 0;
     entry->data = value;
     msrs->nmsrs++;
 
@@ -176,7 +177,6 @@ static int mshv_put_msrs(CPUState *cpu)
 {
     X86CPU *x86cpu = X86_CPU(cpu);
     CPUX86State *env = &x86cpu->env;
-    MsrEntryC *msrs;
     mshv_msr_buf_alloc(x86cpu);
     mshv_msr_entry_add(x86cpu, MSR_IA32_SYSENTER_CS, env->sysenter_cs);
     mshv_msr_entry_add(x86cpu, MSR_IA32_SYSENTER_ESP, env->sysenter_esp);
@@ -187,12 +187,14 @@ static int mshv_put_msrs(CPUState *cpu)
     mshv_msr_entry_add(x86cpu, MSR_LSTAR, env->lstar);
     mshv_msr_entry_add(x86cpu, MSR_KERNELGSBASE, env->kernelgsbase);
     mshv_msr_entry_add(x86cpu, MSR_FMASK, env->fmask);
-    mshv_msr_entry_add(x86cpu, MSR_VM_HSAVE_PA, env->vm_hsave);
+    mshv_msr_entry_add(x86cpu, MSR_MTRRdefType, env->mtrr_deftype);
+    /*mshv_msr_entry_add(x86cpu, MSR_VM_HSAVE_PA, env->vm_hsave);
     mshv_msr_entry_add(x86cpu, MSR_TSC_AUX, env->tsc_aux);
     mshv_msr_entry_add(x86cpu, MSR_TSC_ADJUST, env->tsc_adjust);
     mshv_msr_entry_add(x86cpu, MSR_IA32_SMBASE, env->smbase);
-    msrs = mshv_msr_entry_add(x86cpu, MSR_IA32_SPEC_CTRL, env->spec_ctrl);
-    mshv_configure_msr(mshv_vcpu(cpu), msrs,
+    msrs = mshv_msr_entry_add(x86cpu, MSR_IA32_SPEC_CTRL, env->spec_ctrl);*/
+    mshv_configure_msr(mshv_vcpu(cpu),
+                       (MsrEntryC *)&x86cpu->kvm_msr_buf->entries[0],
                        (uint32_t)x86cpu->kvm_msr_buf->nmsrs);
 
     return 0;
