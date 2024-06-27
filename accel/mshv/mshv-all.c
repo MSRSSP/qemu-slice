@@ -152,7 +152,6 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
 
     if (!memory_region_is_ram(area)) {
         if (writable) {
-            mshv_debug();
             return;
         } else if (!memory_region_is_romd(area)) {
             /*
@@ -171,39 +170,23 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
     mr_offset = section->offset_within_region + start_addr -
                 section->offset_within_address_space;
 
-    mshv_debug();
-
     if (!QEMU_IS_ALIGNED(int128_get64(section->size), page_size) ||
         !QEMU_IS_ALIGNED(section->offset_within_address_space, page_size)) {
         /* Not page aligned, so we can not map as RAM */
         add = false;
     }
-    mshv_debug();
 
     ram = memory_region_get_ram_ptr(area) + mr_offset;
     ram_start_offset = memory_region_get_ram_addr(area) + mr_offset;
     mem = mshv_lookup_matching_slot(mml, start_addr, mem_size);
     if (!add) {
         if (!mem) {
-            mshv_log("Mem not found\n");
-            abort();
+            goto err;
         }
-        mshv_log(
-            "(todo) %s(%s): mem[start_addr: %lx, ram: %lx, ram_start_offset: "
-            "%lx, size: %lx]: %s\n",
-            __func__, name, start_addr, (uint64_t)ram,
-            (uint64_t)ram_start_offset, mem_size,
-            area->readonly ? "ronly" : "rw");
         if (do_mshv_set_memory(mml, mem, false)) {
-            mshv_log("remove(failed) %s(%s): mem[start_addr: %lx, ram: %lx, "
-                     "ram_start_offset: %lx, size: %lx]: %s\n",
-                     __func__, name, start_addr, (uint64_t)ram,
-                     (uint64_t)ram_start_offset, mem_size,
-                     area->readonly ? "ronly" : "rw");
-            abort();
+            goto err;
         }
-        mshv_debug();
-        return;
+        goto ok;
     }
 
     // The memory region is already added and so skip the request.
@@ -211,7 +194,7 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
         return;
     }
 
-    mshv_log("(todo) %s(%s): mem[start_addr: %lx, ram: %lx, ram_start_offset: "
+    mshv_log("[todo] %s(%s): mem[start_addr: %lx, ram: %lx, ram_start_offset: "
              "%lx, size: %lx]: %s\n",
              __func__, name, start_addr, (uint64_t)ram,
              (uint64_t)ram_start_offset, mem_size,
@@ -222,13 +205,22 @@ static void mshv_set_phys_mem(MshvMemoryListener *mml,
     mem->readonly = !writable;
     mem->userspace_addr = (uint64_t)ram;
     if (do_mshv_set_memory(mml, mem, true)) {
-        mshv_err("add(failed) %s(%s): mem[start_addr: %lx, ram: %lx, "
-                 "ram_start_offset: %lx, size: %lx]: %s\n",
-                 __func__, name, start_addr, (uint64_t)ram,
-                 (uint64_t)ram_start_offset, mem_size,
-                 area->readonly ? "ronly" : "rw");
-        // abort();
+        goto err;
     }
+ok:
+    mshv_log("[ok] %s(%s): mem[start_addr: %lx, ram: %lx, ram_start_offset: "
+             "%lx, size: %lx]: %s\n",
+             __func__, name, start_addr, (uint64_t)ram,
+             (uint64_t)ram_start_offset, mem_size,
+             area->readonly ? "ronly" : "rw");
+    return;
+err:
+    mshv_log("[failed] %s(%s): mem[start_addr: %lx, ram: %lx, "
+             "ram_start_offset: %lx, size: %lx]: %s\n",
+             __func__, name, start_addr, (uint64_t)ram,
+             (uint64_t)ram_start_offset, mem_size,
+             area->readonly ? "ronly" : "rw");
+    abort();
 }
 
 static void mshv_region_add(MemoryListener *listener,
