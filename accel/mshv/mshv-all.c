@@ -30,6 +30,9 @@ bool mshv_allowed;
 
 MshvState *mshv_state;
 
+#define MAX_MEM_SLOTS 32
+MshvMemoryRegion mem_slots[MAX_MEM_SLOTS];
+
 static MshvMemoryRegion *mshv_lookup_matching_slot(MshvMemoryListener *mml,
                                                    hwaddr start_addr,
                                                    hwaddr size)
@@ -95,7 +98,7 @@ static MshvMemoryRegion *mshv_alloc_slot(MshvMemoryListener *mml)
 }
 
 static int do_mshv_set_memory(MshvMemoryListener *mml, MshvMemoryRegion *mem,
-                               bool add)
+                              bool add)
 {
     mshv_debug();
     if (add) {
@@ -445,6 +448,7 @@ void mshv_memory_listener_register(MshvState *s, MshvMemoryListener *mml,
     QSIMPLEQ_INIT(&mml->transaction_del);
     mml->listener = mshv_memory_listener;
     mml->listener.name = name;
+    mml->slots = &mem_slots[0];
     memory_listener_register(&mml->listener, as);
     for (i = 0; i < s->nr_as; ++i) {
         if (!s->as[i].as) {
@@ -480,7 +484,12 @@ static int mshv_init(MachineState *ms)
     } while (s->vm == NULL);
 
     mshv_vm_resume(s->vm);
-    s->nr_slot = 32;
+
+    s->nr_slot = MAX_MEM_SLOTS; // MAX
+
+    // MAX number of address spaces:
+    // address_space_memory
+    // system_memory (see target/i386/mshv/mshv-mem.c)
     s->nr_as = 2;
     s->as = g_new0(struct MshvAs, s->nr_as);
 
