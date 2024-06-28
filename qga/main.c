@@ -172,6 +172,7 @@ static void quit_handler(int sig)
 #endif
     }
     g_debug("received signal num %d, quitting", sig);
+
     stop_agent(ga_state, true);
 }
 
