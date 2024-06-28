@@ -1,5 +1,5 @@
 mshv_ss = ss.source_set()
-mshv_ss.add(when: mshv_ioctls, if_true: files(
+mshv_ss.add(when: mshv, if_true: files(
   'mshv-all.c',
 ))
 

@@ -726,16 +726,12 @@ if get_option('kvm').allowed() and host_os == 'linux'
   accelerators += 'CONFIG_KVM'
 endif
 
-accelerators = []
-mshv_ioctls = not_found
-mshv_bindings = not_found
+mshv = not_found
 if get_option('mshv').allowed() and host_os == 'linux'
-  mshv_ioctls = cc.find_library('mshv_ioctls_c',  dirs: ['/home/ziqiao/l1vh/mshv/target/debug'], required: get_option('mshv'))
-  mshv_bindings = cc.find_library('mshv_bindings',  dirs: ['/home/ziqiao/l1vh/mshv/target/debug'], required: get_option('mshv'))
-
-  if mshv_bindings.found() and mshv_ioctls.found()
+  mshv = cc.find_library('mshv', required: get_option('mshv'))
+  if cc.has_header('mshv.h', required: get_option('mshv')) and mshv.found()
     accelerators += 'CONFIG_MSHV'
-endif
+  endif
 endif
 
 if get_option('whpx').allowed() and host_os == 'windows'
@@ -4280,7 +4276,7 @@ if have_system
   summary_info += {'HVF support':       config_all_accel.has_key('CONFIG_HVF')}
   summary_info += {'WHPX support':      config_all_accel.has_key('CONFIG_WHPX')}
   summary_info += {'NVMM support':      config_all_accel.has_key('CONFIG_NVMM')}
-  summary_info += {'KVM support':       config_all_accel.has_key('CONFIG_MSHV')}
+  summary_info += {'MSHV support':       config_all_accel.has_key('CONFIG_MSHV')}
   summary_info += {'Xen support':       xen.found()}
   if xen.found()
     summary_info += {'xen ctrl version':  xen.version()}
