@@ -141,7 +141,7 @@ static int mshv_set_phys_mem(MshvMemoryListener *mml,
                              const char *name)
 {
     MemoryRegion *area = section->mr, *copy_mr;
-    char name[64] = "copy";
+    char name2[64] = "copy";
     bool writable = !area->readonly && !area->rom_device;
     uint64_t page_size = qemu_real_host_page_size();
     uint64_t mem_size = int128_get64(section->size);
@@ -218,7 +218,7 @@ static int mshv_set_phys_mem(MshvMemoryListener *mml,
         // However, mshv requires the user memory regions are not overlapped.
         // Retry to create a copy of memory rom so that mshv driver can support.
         copy_mr = g_malloc0(sizeof(*copy_mr));
-        memcpy(name + strlen(name), area->name, strlen(area->name) + 1);
+        memcpy(name2 + strlen(name2), area->name, strlen(area->name) + 1);
         memory_region_init_ram(copy_mr, NULL, area->name, mem_size,
                                &error_fatal);
         mem->userspace_addr = (uint64_t)memory_region_get_ram_ptr(copy_mr);
