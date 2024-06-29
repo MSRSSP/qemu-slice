@@ -219,8 +219,7 @@ static int mshv_set_phys_mem(MshvMemoryListener *mml,
         // Retry to create a copy of memory rom so that mshv driver can support.
         copy_mr = g_malloc0(sizeof(*copy_mr));
         memcpy(name2 + strlen(name2), area->name, strlen(area->name) + 1);
-        memory_region_init_ram(copy_mr, NULL, area->name, mem_size,
-                               &error_fatal);
+        memory_region_init_ram(copy_mr, NULL, name2, mem_size, &error_fatal);
         mem->userspace_addr = (uint64_t)memory_region_get_ram_ptr(copy_mr);
         memcpy((void *)mem->userspace_addr, ram, mem_size);
         ret = do_mshv_set_memory(mml, mem, true);
